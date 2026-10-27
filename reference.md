@@ -1,0 +1,458 @@
+# Reference
+## decisions
+<details><summary><code>client.decisions.<a href="src/hume_decisions/decisions/client.py">create</a>(...) -> DecisionsResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Asks questions about one audio file and returns the answers, with the `run_id` of the model run that produced them. Each answer estimates how human raters would respond, so you choose the thresholds for acting on it.
+
+Ask every question you have about the same audio in one request. All the questions are answered in one model inference, so an answer can change when other questions are added, removed or reordered. To compare answers across recordings, send the same questions in the same order. To evaluate several files, send one request per file.
+
+## What the model reads
+
+For each question, the model reads:
+
+1. The question's `instructions`.
+2. The question's `criteria`: each `choice` option's `name`, with its `description` when it has one; the text of each `score` level; or a `noul` question's `true` and `false` guidance.
+3. The request's `context`.
+4. The audio.
+
+Answers are keyed by question ID, `choice` probabilities by option `name`, and `score` probabilities by level index.
+
+## Choosing a primitive
+
+| To ask | Use | The answer gives |
+|---|---|---|
+| Whether something is true of the audio | `noul` | The share of raters who would answer yes |
+| Which of several options applies | `choice` | The probability of each option, and the most likely one |
+| Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
+| When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+
+## Using the answers
+
+1. Each probability estimates the share of human raters who would give that answer. A `noul` answer near 0.5 means raters would split on the audio, not that the model is unsure.
+2. `confidence` measures how much raters would agree, not how certain the model is.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from hume_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Span
+from hume_decisions.environment import DecisionsClientEnvironment
+
+client = DecisionsClient(
+    api_key="<value>",
+    environment=DecisionsClientEnvironment.PRODUCTION,
+)
+
+client.decisions.create(
+    file="example_file",
+    request=DecisionsRequest(
+        context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+        questions={
+            "talks_over_caller": Question_Noul(
+                instructions="Does the agent talk over the caller?",
+            ),
+            "agent_tone": Question_Choice(
+                instructions="Which best describes the tone of the agent?",
+                criteria=[
+                    Criterion(
+                        name="warm",
+                        description="Warm and friendly toward the caller",
+                    ),
+                    Criterion(
+                        name="neutral",
+                        description="Polite but impersonal",
+                    ),
+                    Criterion(
+                        name="curt",
+                        description="Short or dismissive with the caller",
+                    )
+                ],
+            ),
+            "agent_naturalness": Question_Score(
+                instructions="How natural does the agent sound?",
+                criteria=[
+                    "Not at all",
+                    "2",
+                    "3",
+                    "4",
+                    "Extremely"
+                ],
+            ),
+            "agent_glitches": Question_Span(
+                instructions="Where does the agent glitch, slur or sound robotic?",
+            )
+        },
+    ),
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `DecisionsRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**file:** `core.File` — The audio file, MP3 or WAV, in a part named `file`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.decisions.<a href="src/hume_decisions/decisions/client.py">input_tokens</a>(...) -> InputTokensResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
+
+The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
+
+Hume counts the input tokens from the audio duration, the context and the questions.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from hume_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Span
+from hume_decisions.environment import DecisionsClientEnvironment
+
+client = DecisionsClient(
+    api_key="<value>",
+    environment=DecisionsClientEnvironment.PRODUCTION,
+)
+
+client.decisions.input_tokens(
+    file="example_file",
+    request=DecisionsRequest(
+        context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+        questions={
+            "talks_over_caller": Question_Noul(
+                instructions="Does the agent talk over the caller?",
+            ),
+            "agent_tone": Question_Choice(
+                instructions="Which best describes the tone of the agent?",
+                criteria=[
+                    Criterion(
+                        name="warm",
+                        description="Warm and friendly toward the caller",
+                    ),
+                    Criterion(
+                        name="neutral",
+                        description="Polite but impersonal",
+                    ),
+                    Criterion(
+                        name="curt",
+                        description="Short or dismissive with the caller",
+                    )
+                ],
+            ),
+            "agent_naturalness": Question_Score(
+                instructions="How natural does the agent sound?",
+                criteria=[
+                    "Not at all",
+                    "2",
+                    "3",
+                    "4",
+                    "Extremely"
+                ],
+            ),
+            "agent_glitches": Question_Span(
+                instructions="Where does the agent glitch, slur or sound robotic?",
+            )
+        },
+    ),
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `DecisionsRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**file:** `core.File` — The audio file, MP3 or WAV, in a part named `file`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+## runs
+<details><summary><code>client.runs.<a href="src/hume_decisions/runs/client.py">list</a>(...) -> RunsPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Your organization's runs, newest first, one page at a time. The filters combine.
+
+A run is one model inference. Every successful decisions request has a run. A decisions request that fails before its input reaches the model, including every request rejected with a `4xx` status, has none.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from hume_decisions import DecisionsClient
+from hume_decisions.environment import DecisionsClientEnvironment
+
+client = DecisionsClient(
+    api_key="<value>",
+    environment=DecisionsClientEnvironment.PRODUCTION,
+)
+
+client.runs.list()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**page_size:** `typing.Optional[int]` — How many runs to return.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**cursor:** `typing.Optional[str]` — The `next_cursor` of the previous page. Pass it back unchanged, with the same filters as the request that returned it.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Only runs made by this user.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**status:** `typing.Optional[RunStatus]` — Only runs with this status.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**started_before:** `typing.Optional[datetime.datetime]` — Only runs that started before this time, in RFC 3339 format.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**started_after:** `typing.Optional[datetime.datetime]` — Only runs that started at or after this time, in RFC 3339 format. Consecutive time ranges that share a boundary neither skip a run nor return one twice.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.runs.<a href="src/hume_decisions/runs/client.py">get</a>(...) -> Run</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+The run's status, when it started and ended, the audio it received, and the request it evaluated. The run does not include the answers.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from hume_decisions import DecisionsClient
+from hume_decisions.environment import DecisionsClientEnvironment
+
+client = DecisionsClient(
+    api_key="<value>",
+    environment=DecisionsClientEnvironment.PRODUCTION,
+)
+
+client.runs.get(
+    run_id="019a1f3c-7d2e-7b41-9c58-2e6f4a1d8b03",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**run_id:** `str` — The run's ID: the `run_id` of a decisions response. An ID that is not a UUID returns `404`, as an unknown one does.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
