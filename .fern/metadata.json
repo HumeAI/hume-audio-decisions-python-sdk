@@ -1,0 +1,17 @@
+{
+  "cliVersion": "5.175.0",
+  "generatorName": "fernapi/fern-python-sdk",
+  "generatorVersion": "5.41.9",
+  "generatorConfig": {
+    "package_name": "hume_decisions",
+    "client": {
+      "class_name": "DecisionsClient"
+    }
+  },
+  "originGitCommit": "2a86c39d2ee27416096f24af12dda45e2fa04898",
+  "originGitCommitIsDirty": false,
+  "invokedBy": "ci",
+  "requestedVersion": "0.1.0",
+  "ciProvider": "github",
+  "sdkVersion": "0.1.0"
+}
