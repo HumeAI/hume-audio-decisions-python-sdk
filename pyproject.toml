@@ -1,13 +1,13 @@
 [project]
-name = "hume_decisions"
+name = "hume-decisions"
 dynamic = ["version"]
 license = "MIT"
 license-files = ["LICENSE"]
 
 [tool.poetry]
-name = "hume_decisions"
+name = "hume-decisions"
 version = "0.1.0"
-description = ""
+description = "A Python SDK for the Hume Decisions API"
 readme = "README.md"
 authors = []
 keywords = []
@@ -35,6 +35,8 @@ packages = [
 ]
 
 [tool.poetry.urls]
+Documentation = 'https://dev.hume.ai/decisions/docs/overview'
+Homepage = 'https://www.hume.ai/'
 Repository = 'https://github.com/HumeAI/hume-decisions-python-sdk'
 
 [tool.poetry.dependencies]

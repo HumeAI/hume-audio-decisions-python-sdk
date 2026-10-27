@@ -95,7 +95,7 @@ class TestDefaultClientsWithoutAiohttp(unittest.TestCase):
 
             with self.assertRaises(RuntimeError) as ctx:
                 hume_decisions._default_clients.DefaultAioHttpClient()
-            self.assertIn("pip install hume_decisions[aiohttp]", str(ctx.exception))
+            self.assertIn("pip install hume-decisions[aiohttp]", str(ctx.exception))
 
         importlib.reload(hume_decisions._default_clients)
 
