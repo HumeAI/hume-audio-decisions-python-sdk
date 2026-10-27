@@ -1,3 +1,3 @@
 from importlib import metadata
 
-__version__ = metadata.version("hume_decisions")
+__version__ = metadata.version("hume-decisions")
