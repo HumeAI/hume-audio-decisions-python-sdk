@@ -4,16 +4,17 @@ import typing
 
 import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .moment import Moment
 
 
-class SpanQuestion(UniversalBaseModel):
+class MomentAnswer(UniversalBaseModel):
     """
-    Asks when an event occurs in the audio.
+    The answer to a `moment` question.
     """
 
-    instructions: str = pydantic.Field()
+    moments: typing.List[Moment] = pydantic.Field()
     """
-    The question, written in natural language.
+    The moments where the described event may occur, in order of `audio_start_ms`. Overlapping candidates are merged. An empty array means the event was not found.
     """
 
     if IS_PYDANTIC_V2:

@@ -55,7 +55,7 @@ class DecisionsClient:
         | Whether something is true of the audio | `noul` | The share of raters who would answer yes |
         | Which of several options applies | `choice` | The probability of each option, and the most likely one |
         | Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-        | When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+        | When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
 
         ## Using the answers
 
@@ -84,9 +84,9 @@ class DecisionsClient:
             DecisionsClient,
             DecisionsRequest,
             Question_Choice,
+            Question_Moment,
             Question_Noul,
             Question_Score,
-            Question_Span,
         )
 
         client = DecisionsClient(
@@ -120,7 +120,7 @@ class DecisionsClient:
                         instructions="How natural does the agent sound?",
                         criteria=["Not at all", "2", "3", "4", "Extremely"],
                     ),
-                    "agent_glitches": Question_Span(
+                    "agent_glitches": Question_Moment(
                         instructions="Where does the agent glitch, slur or sound robotic?",
                     ),
                 },
@@ -162,9 +162,9 @@ class DecisionsClient:
             DecisionsClient,
             DecisionsRequest,
             Question_Choice,
+            Question_Moment,
             Question_Noul,
             Question_Score,
-            Question_Span,
         )
 
         client = DecisionsClient(
@@ -198,7 +198,7 @@ class DecisionsClient:
                         instructions="How natural does the agent sound?",
                         criteria=["Not at all", "2", "3", "4", "Extremely"],
                     ),
-                    "agent_glitches": Question_Span(
+                    "agent_glitches": Question_Moment(
                         instructions="Where does the agent glitch, slur or sound robotic?",
                     ),
                 },
@@ -250,7 +250,7 @@ class AsyncDecisionsClient:
         | Whether something is true of the audio | `noul` | The share of raters who would answer yes |
         | Which of several options applies | `choice` | The probability of each option, and the most likely one |
         | Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-        | When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+        | When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
 
         ## Using the answers
 
@@ -281,9 +281,9 @@ class AsyncDecisionsClient:
             Criterion,
             DecisionsRequest,
             Question_Choice,
+            Question_Moment,
             Question_Noul,
             Question_Score,
-            Question_Span,
         )
 
         client = AsyncDecisionsClient(
@@ -320,7 +320,7 @@ class AsyncDecisionsClient:
                             instructions="How natural does the agent sound?",
                             criteria=["Not at all", "2", "3", "4", "Extremely"],
                         ),
-                        "agent_glitches": Question_Span(
+                        "agent_glitches": Question_Moment(
                             instructions="Where does the agent glitch, slur or sound robotic?",
                         ),
                     },
@@ -367,9 +367,9 @@ class AsyncDecisionsClient:
             Criterion,
             DecisionsRequest,
             Question_Choice,
+            Question_Moment,
             Question_Noul,
             Question_Score,
-            Question_Span,
         )
 
         client = AsyncDecisionsClient(
@@ -406,7 +406,7 @@ class AsyncDecisionsClient:
                             instructions="How natural does the agent sound?",
                             criteria=["Not at all", "2", "3", "4", "Extremely"],
                         ),
-                        "agent_glitches": Question_Span(
+                        "agent_glitches": Question_Moment(
                             instructions="Where does the agent glitch, slur or sound robotic?",
                         ),
                     },

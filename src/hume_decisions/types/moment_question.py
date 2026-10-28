@@ -6,24 +6,14 @@ import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class Span(UniversalBaseModel):
+class MomentQuestion(UniversalBaseModel):
     """
-    A time span where the described event may occur.
-    """
-
-    audio_start_ms: int = pydantic.Field()
-    """
-    Where the span begins, in milliseconds from the start of the audio file.
+    Asks when an event occurs in the audio.
     """
 
-    audio_end_ms: int = pydantic.Field()
+    instructions: str = pydantic.Field()
     """
-    Where the span ends, in milliseconds from the start of the audio file.
-    """
-
-    probability: float = pydantic.Field()
-    """
-    The probability that the event occurs in the span.
+    The question, written in natural language.
     """
 
     if IS_PYDANTIC_V2:

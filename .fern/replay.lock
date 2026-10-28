@@ -18,14 +18,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: eb69ef808c8ae7aed1a0bf4cd1d1969704d6f5c4
+  - commit_sha: 1cd12f7e82b1a904e4493def9d57b6d02466890b
+    tree_hash: 61c360ed0166c9f6d2263bf9b80ba9a359b2ac4e
+    timestamp: 2026-10-28T19:19:07.166Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: 1cd12f7e82b1a904e4493def9d57b6d02466890b
 patches:
   - id: patch-95641ac3
     content_hash: sha256:403ea10ce493e9ac9a8b1399a47174519036f388936b890f53162da0e88d9d1e
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: eb69ef808c8ae7aed1a0bf4cd1d1969704d6f5c4
+    base_generation: 1cd12f7e82b1a904e4493def9d57b6d02466890b
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -200,3 +206,4 @@ patches:
                 uses: pypa/gh-action-pypi-publish@release/v1
                 with:
                   repository-url: https://upload.pypi.org/legacy/
+    user_owned: true
