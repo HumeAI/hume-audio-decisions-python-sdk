@@ -3,6 +3,7 @@
 import typing
 
 from .. import core
+from ..audio_helpers.results import ChunkedDecisionsResult, send_chunks
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.decisions_request import DecisionsRequest
@@ -129,6 +130,82 @@ class DecisionsClient:
         """
         _response = self._raw_client.create(request=request, file=file, request_options=request_options)
         return _response.data
+
+    def create_chunked(
+        self,
+        *,
+        request: DecisionsRequest,
+        file: core.File,
+        chunk_ms: int,
+        start_ms: typing.Optional[int] = None,
+        end_ms: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> ChunkedDecisionsResult:
+        """
+        Splits a recording longer than `create` accepts into chunks and sends each chunk as a separate `create` request, with its own `run_id` and its own billing. The answers are not combined across chunks.
+
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+
+        Parameters
+        ----------
+        request : DecisionsRequest
+            Sent unchanged with every chunk.
+
+        file : core.File
+            The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
+
+        chunk_ms : int
+            Duration of each chunk in milliseconds, from 1 to 300000.
+
+        start_ms : typing.Optional[int]
+            Where in the recording to start, in milliseconds. Defaults to the start of the recording.
+
+        end_ms : typing.Optional[int]
+            Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration, applied to every chunk's request.
+
+        Returns
+        -------
+        ChunkedDecisionsResult
+            Each chunk's position in the recording and its response, in the order of the chunks.
+
+        Raises
+        ------
+        ValueError
+            The recording cannot be split as requested. This is raised before any request is sent.
+
+        Examples
+        --------
+        from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+
+        client = DecisionsClient(
+            api_key="YOUR_API_KEY",
+        )
+        with open("call.mp3", "rb") as f:
+            result = client.decisions.create_chunked(
+                request=DecisionsRequest(
+                    questions={
+                        "agent_glitches": Question_Moment(
+                            instructions="Where does the agent glitch, slur or sound robotic?",
+                        ),
+                    },
+                ),
+                file=f,
+                chunk_ms=300_000,
+            )
+        for chunk in result.chunks:
+            if chunk.response is not None:
+                print(chunk.start_ms, chunk.response.run_id)
+        """
+        return send_chunks(
+            lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
+            file,
+            chunk_ms=chunk_ms,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
 
     def input_tokens(
         self, *, request: DecisionsRequest, file: core.File, request_options: typing.Optional[RequestOptions] = None
