@@ -3,3 +3,5 @@ README.md
 .fern/replay.lock
 .fern/replay.yml
 .gitattributes
+src/hume_decisions/audio_helpers
+tests/custom
