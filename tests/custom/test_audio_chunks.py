@@ -208,3 +208,63 @@ def test_chunk_duration_that_is_not_an_integer_is_rejected() -> None:
 
     with pytest.raises(TypeError, match="chunk_ms must be an integer, got 1.5"):
         iter_audio_chunks(recording, chunk_ms=typing.cast(typing.Any, 1.5))
+
+
+def test_range_is_split_into_chunks_timed_from_the_start_of_the_recording() -> None:
+    pcm = _pcm(5000 * 16 * 2)
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=1500, end_ms=4000))
+
+    assert [(c.index, c.start_ms, c.end_ms) for c in chunks] == [(0, 1500, 2500), (1, 2500, 3500), (2, 3500, 4000)]
+    assert b"".join(_read(c.data)[1] for c in chunks) == pcm[1500 * 32 : 4000 * 32]
+
+
+def test_range_cuts_between_samples_round_down_from_the_start_of_the_range() -> None:
+    pcm = _pcm(22050 * 2)
+    recording = _wav(sample_rate=22050, channels=1, sample_width=2, data=pcm)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=10, start_ms=5, end_ms=45))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(5, 15), (15, 25), (25, 35), (35, 45)]
+    # 5 ms is 110.25 samples and 45 ms is 992.25 samples.
+    assert b"".join(_read(c.data)[1] for c in chunks) == pcm[110 * 2 : 992 * 2]
+
+
+def test_range_may_end_at_the_duration_the_final_chunk_reports() -> None:
+    # 1004 samples at 22,050 Hz last 45.533 ms, which the final chunk reports as 46 ms.
+    pcm = _pcm(1004 * 2)
+    recording = _wav(sample_rate=22050, channels=1, sample_width=2, data=pcm)
+    duration_ms = list(iter_audio_chunks(recording, chunk_ms=1000))[-1].end_ms
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=duration_ms - 1, end_ms=duration_ms))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(45, 46)]
+    assert _read(chunks[0].data)[1] == pcm[992 * 2 :]
+
+
+@pytest.mark.parametrize(
+    ("start_ms", "end_ms", "message"),
+    [
+        (-1, None, "start_ms must not be negative"),
+        (1000, 1000, "end_ms must be greater than start_ms"),
+        (None, 0, "end_ms must be greater than start_ms"),
+        (2000, None, "start_ms must be less than the recording's duration of 2000 ms"),
+        (None, 2001, "end_ms must not exceed the recording's duration of 2000 ms"),
+    ],
+)
+def test_range_outside_the_recording_is_rejected(
+    start_ms: typing.Optional[int], end_ms: typing.Optional[int], message: str
+) -> None:
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2000 * 16 * 2))
+
+    with pytest.raises(ValueError, match=message):
+        iter_audio_chunks(recording, chunk_ms=1000, start_ms=start_ms, end_ms=end_ms)
+
+
+@pytest.mark.parametrize("name", ["start_ms", "end_ms"])
+def test_range_bound_that_is_not_an_integer_is_rejected(name: str) -> None:
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
+
+    with pytest.raises(TypeError, match=f"{name} must be an integer, got 0.5"):
+        iter_audio_chunks(recording, chunk_ms=1000, **{name: typing.cast(typing.Any, 0.5)})

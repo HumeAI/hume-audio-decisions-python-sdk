@@ -36,13 +36,19 @@ class AudioChunk:
     data: bytes
 
 
-def iter_audio_chunks(file: bytes, *, chunk_ms: int) -> typing.Iterator[AudioChunk]:
+def iter_audio_chunks(
+    file: bytes,
+    *,
+    chunk_ms: int,
+    start_ms: typing.Optional[int] = None,
+    end_ms: typing.Optional[int] = None,
+) -> typing.Iterator[AudioChunk]:
     """
-    Splits a recording into chunks short enough for the Decisions API.
+    Splits a recording, or part of one, into chunks short enough for the Decisions API.
 
     Every chunk is `chunk_ms` long except the last, which holds what remains. No chunk is empty.
-    Cuts fall on whole samples, so a chunk can start or end up to one sample earlier than a whole
-    multiple of `chunk_ms`.
+    Cuts fall on whole samples, so a chunk can start or end up to one sample earlier than
+    `start_ms` plus a whole multiple of `chunk_ms`.
 
     Each WAV chunk is a new WAV file with the recording's sample format and only its audio; other
     chunks in the file, such as metadata, are left out.
@@ -56,16 +62,25 @@ def iter_audio_chunks(file: bytes, *, chunk_ms: int) -> typing.Iterator[AudioChu
     chunk_ms : int
         Duration of each chunk in milliseconds, from 1 to 300000.
 
+    start_ms : typing.Optional[int]
+        Where in the recording to start, in milliseconds. Defaults to the start of the recording.
+
+    end_ms : typing.Optional[int]
+        Where in the recording to stop, in milliseconds, no later than the recording's duration.
+        Defaults to the end of the recording.
+
     Returns
     -------
     typing.Iterator[AudioChunk]
-        The chunks in order.
+        The chunks in order. Their times are measured from the start of the recording, not from
+        `start_ms`.
 
     Raises
     ------
     ValueError
-        chunk_ms is out of range, or the recording is empty or not a WAV file this helper supports,
-        such as a compressed or RF64 file.
+        chunk_ms is out of range, start_ms and end_ms do not select audio within the recording,
+        or the recording is empty or not a WAV file this helper supports, such as a compressed or
+        RF64 file.
 
     Examples
     --------
@@ -76,22 +91,46 @@ def iter_audio_chunks(file: bytes, *, chunk_ms: int) -> typing.Iterator[AudioChu
     for chunk in iter_audio_chunks(recording, chunk_ms=60_000):
         print(chunk.index, chunk.start_ms, chunk.end_ms, len(chunk.data))
     """
-    chunk_ms = _check_chunk_ms(chunk_ms)
+    chunk_ms = _check_integer("chunk_ms", chunk_ms)
+    if not 1 <= chunk_ms <= MAX_CHUNK_MS:
+        raise ValueError(f"chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {chunk_ms}.")
+    if start_ms is not None:
+        start_ms = _check_integer("start_ms", start_ms)
+        if start_ms < 0:
+            raise ValueError(f"start_ms must not be negative, got {start_ms}.")
+    if end_ms is not None:
+        end_ms = _check_integer("end_ms", end_ms)
+        if end_ms <= (start_ms or 0):
+            raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
     data = memoryview(file)
     if not is_wav(data):
         raise ValueError("Unsupported audio format. Only WAV files can be split into chunks.")
     audio = parse_wav(data)
     if audio.sample_count == 0:
         raise ValueError("The audio is empty.")
-    return _iter_wav_chunks(data, audio, chunk_ms)
+    # The longest range allowed ends at the duration that the final chunk reports.
+    duration_ms = _to_ms(audio.sample_count, audio.sample_rate)
+    if start_ms is None:
+        start_ms = 0
+    elif _to_sample(start_ms, audio.sample_rate) >= audio.sample_count:
+        raise ValueError(f"start_ms must be less than the recording's duration of {duration_ms} ms, got {start_ms}.")
+    if end_ms is None:
+        end_ms = duration_ms
+    elif end_ms > duration_ms:
+        raise ValueError(f"end_ms must not exceed the recording's duration of {duration_ms} ms, got {end_ms}.")
+    return _iter_wav_chunks(data, audio, chunk_ms, start_ms, end_ms)
 
 
-def _iter_wav_chunks(data: memoryview, audio: WavAudio, chunk_ms: int) -> typing.Iterator[AudioChunk]:
+def _iter_wav_chunks(
+    data: memoryview, audio: WavAudio, chunk_ms: int, start_ms: int, end_ms: int
+) -> typing.Iterator[AudioChunk]:
+    last = min(_to_sample(end_ms, audio.sample_rate), audio.sample_count)
     index = 0
-    start = 0
-    while start < audio.sample_count:
-        # Each cut is computed from the start of the recording, so rounding does not accumulate.
-        end = min((index + 1) * chunk_ms * audio.sample_rate // 1000, audio.sample_count)
+    start = _to_sample(start_ms, audio.sample_rate)
+    while start < last:
+        # Each cut is computed from start_ms rather than from the previous cut, so rounding does not
+        # accumulate.
+        end = min(_to_sample(start_ms + (index + 1) * chunk_ms, audio.sample_rate), last)
         yield AudioChunk(
             index=index,
             start_ms=_to_ms(start, audio.sample_rate),
@@ -102,17 +141,18 @@ def _iter_wav_chunks(data: memoryview, audio: WavAudio, chunk_ms: int) -> typing
         start = end
 
 
+def _to_sample(ms: int, sample_rate: int) -> int:
+    return ms * sample_rate // 1000
+
+
 def _to_ms(sample: int, sample_rate: int) -> int:
     return (sample * 2000 + sample_rate) // (2 * sample_rate)
 
 
-def _check_chunk_ms(chunk_ms: int) -> int:
+def _check_integer(name: str, value: int) -> int:
     # operator.index also accepts NumPy integers, which are not subclasses of int. Its result is a
     # plain int, which arithmetic needs because a small NumPy integer can overflow.
     try:
-        chunk_ms = operator.index(chunk_ms)
+        return operator.index(value)
     except TypeError:
-        raise TypeError(f"chunk_ms must be an integer, got {chunk_ms!r}.") from None
-    if not 1 <= chunk_ms <= MAX_CHUNK_MS:
-        raise ValueError(f"chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {chunk_ms}.")
-    return chunk_ms
+        raise TypeError(f"{name} must be an integer, got {value!r}.") from None
