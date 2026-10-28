@@ -59,9 +59,13 @@ def iter_audio_chunks(
       are left out.
     - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate. Each
       chunk holds as many whole frames as fit in `chunk_ms`, so it can be up to one frame shorter,
-      and `start_ms` and `end_ms` move to the nearest frame boundary. Each chunk holds only the
-      recording's frames; tags, and the header frame that states the whole file's length, are left
-      out.
+      and `start_ms` and `end_ms` move to the nearest frame boundary. A frame can store part of
+      its audio data in the frames before it, and its sound continues from the frame before, so
+      each chunk also starts with the frames its first new frame needs to decode exactly. That is
+      usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames count
+      toward `chunk_ms` and repeat the end of the previous chunk, or start before `start_ms`. Each
+      chunk holds only the recording's frames; tags, and the header frame that states the whole
+      file's length, are left out.
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
@@ -93,10 +97,11 @@ def iter_audio_chunks(
     Raises
     ------
     ValueError
-        chunk_ms is out of range or shorter than one MP3 frame, start_ms and end_ms do not select
-        audio within the recording, or the recording is empty or not a file this helper supports,
-        such as a compressed WAV or RF64 file. Any damage to an MP3 file is found before this call
-        returns, so no chunk is produced from a file that cannot be read to the end.
+        chunk_ms is out of range or too short for an MP3 chunk to hold a new frame and the frames
+        it needs, start_ms and end_ms do not select audio within the recording, or the recording is
+        empty or not a file this helper supports, such as a compressed WAV or RF64 file. Any damage
+        to an MP3 file is found before this call returns, so no chunk is produced from a file that
+        cannot be read to the end.
 
     Examples
     --------
@@ -172,7 +177,7 @@ def _mp3_chunks(
     # Rounding down keeps every chunk within chunk_ms, so a chunk_ms of 300000 stays within the
     # API's limit.
     frames_per_chunk = chunk_ms * mp3.sample_rate // (1000 * frame_samples)
-    frame_ms = -(-frame_samples * 1000 // mp3.sample_rate)
+    frame_ms = _frames_ms(mp3, 1)
     if frames_per_chunk == 0:
         raise ValueError(f"chunk_ms must be at least {frame_ms} ms, the length of one frame of this MP3 file.")
     # Times given by the caller are often ones a chunk reported, which are rounded to the
@@ -184,13 +189,30 @@ def _mp3_chunks(
         raise ValueError(
             f"start_ms and end_ms must be at least {frame_ms} ms apart, the length of one frame of this MP3 file."
         )
+    # A chunk that could hold only the frames needed before its first new frame would never advance.
+    needed_before = max(mp3.frames_needed_before(frame) for frame in range(first, last))
+    if frames_per_chunk <= needed_before:
+        raise ValueError(
+            f"chunk_ms must be at least {_frames_ms(mp3, needed_before + 1)} ms for this MP3 file. Its frames"
+            f" need up to {needed_before} frames before them to decode, and a chunk must hold those along with"
+            " at least one new frame."
+        )
     return _iter_mp3_chunks(data, mp3, frames_per_chunk, first, last)
+
+
+def _frames_ms(mp3: Mp3Audio, frames: int) -> int:
+    return -(-frames * mp3.samples_per_frame * 1000 // mp3.sample_rate)
 
 
 def _iter_mp3_chunks(
     data: memoryview, mp3: Mp3Audio, frames_per_chunk: int, first: int, last: int
 ) -> typing.Iterator[AudioChunk]:
-    for index, start in enumerate(range(first, last, frames_per_chunk)):
+    index = 0
+    new = first
+    while new < last:
+        # Without the frames before it, the first new frame decodes wrongly. They repeat the end of
+        # the previous chunk.
+        start = new - mp3.frames_needed_before(new)
         end = min(start + frames_per_chunk, last)
         yield AudioChunk(
             index=index,
@@ -198,6 +220,8 @@ def _iter_mp3_chunks(
             end_ms=_to_ms(end * mp3.samples_per_frame, mp3.sample_rate),
             data=mp3_chunk(data, mp3, start, end),
         )
+        index += 1
+        new = end
 
 
 def _iter_wav_chunks(

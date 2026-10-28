@@ -22,7 +22,10 @@ class _Header(typing.NamedTuple):
     version: int
     sample_rate: int
     length: int
-    mono: bool
+    # Bytes from the start of the frame to its side information, which follows the header and an
+    # optional checksum.
+    side_info_start: int
+    side_info_size: int
 
 
 class Mp3Audio(typing.NamedTuple):
@@ -30,10 +33,34 @@ class Mp3Audio(typing.NamedTuple):
     samples_per_frame: int
     # Where each frame starts, followed by where the last one ends. Frames are contiguous.
     offsets: typing.List[int]
+    # For each frame, how many bytes of its audio data are stored in the frames before it, and how
+    # many bytes of audio data, its own or later frames', it holds itself.
+    reservoir_bytes: typing.List[int]
+    main_data_bytes: typing.List[int]
 
     @property
     def frame_count(self) -> int:
         return len(self.offsets) - 1
+
+    def frames_needed_before(self, frame: int) -> int:
+        """Counts the frames that must come before `frame` in a chunk for it to decode exactly."""
+        if frame == 0:
+            return 0
+        # Each frame's output is blended with the end of the previous frame's, so the previous frame
+        # must decode exactly too, and so needs its own stored audio data.
+        return max(self._frames_holding_data_of(frame), 1 + self._frames_holding_data_of(frame - 1))
+
+    def _frames_holding_data_of(self, frame: int) -> int:
+        needed = self.reservoir_bytes[frame]
+        if needed == 0:
+            return 0
+        count = 0
+        while needed > 0 and count < frame:
+            count += 1
+            needed -= self.main_data_bytes[frame - count]
+        # Decoders such as ffmpeg and mpg123 do not keep the audio data of the first frame they read
+        # when they cannot decode it, so the data must start after the chunk's first frame.
+        return min(count + 1, frame)
 
 
 def is_mp3(data: memoryview) -> bool:
@@ -43,12 +70,12 @@ def is_mp3(data: memoryview) -> bool:
 def parse_mp3(data: memoryview) -> Mp3Audio:
     offset = _skip_id3v2(data, 0)
     first = _read_header(data, offset)
-    offsets: typing.List[int] = []
+    audio = Mp3Audio(first.sample_rate, 1152 if first.version == _MPEG1 else 576, [], [], [])
     if offset + first.length <= len(data):
         # The first frame can be a Xing, Info or VBRI header, which holds the length of the whole
         # file instead of audio. Left in a chunk, it would tell players the chunk is that long.
         if not _is_vbr_header(data, offset, first):
-            offsets.append(offset)
+            _add_frame(data, offset, first, audio)
         offset += first.length
     while offset + 4 <= len(data) and not any(bytes(data[offset : offset + len(tag)]) == tag for tag in _TRAILING_TAGS):
         header = _read_header(data, offset)
@@ -57,15 +84,28 @@ def parse_mp3(data: memoryview) -> Mp3Audio:
         # A file cut short is read up to its last whole frame.
         if offset + header.length > len(data):
             break
-        offsets.append(offset)
+        _add_frame(data, offset, header, audio)
         offset += header.length
-    offsets.append(offset)
-    return Mp3Audio(first.sample_rate, 1152 if first.version == _MPEG1 else 576, offsets)
+    audio.offsets.append(offset)
+    return audio
 
 
 def mp3_chunk(data: memoryview, audio: Mp3Audio, start: int, end: int) -> bytes:
     """Builds an MP3 file holding frames `start` to `end` and none of the source's tags."""
     return bytes(data[audio.offsets[start] : audio.offsets[end]])
+
+
+def _add_frame(data: memoryview, offset: int, header: _Header, audio: Mp3Audio) -> None:
+    # Layer III frames may store audio data in the unused space of the frames before them. The side
+    # information starts with how far back that data begins: 9 bits in MPEG-1 and 8 bits otherwise.
+    side_info = offset + header.side_info_start
+    if header.version == _MPEG1:
+        reservoir = data[side_info] << 1 | data[side_info + 1] >> 7
+    else:
+        reservoir = data[side_info]
+    audio.offsets.append(offset)
+    audio.reservoir_bytes.append(reservoir)
+    audio.main_data_bytes.append(max(0, header.length - header.side_info_start - header.side_info_size))
 
 
 def _skip_id3v2(data: memoryview, offset: int) -> int:
@@ -98,15 +138,18 @@ def _read_header(data: memoryview, offset: int) -> _Header:
     mpeg1 = version == _MPEG1
     sample_rate = _SAMPLE_RATES[version][sample_rate_index]
     length = (144000 if mpeg1 else 72000) * _BITRATES[mpeg1][bitrate_index] // sample_rate + (b2 >> 1 & 1)
-    return _Header(version, sample_rate, length, b3 >> 6 == _MONO)
+    mono = b3 >> 6 == _MONO
+    side_info_size = (17 if mono else 32) if mpeg1 else (9 if mono else 17)
+    # A protection bit of 0 means a 16-bit checksum follows the header.
+    side_info_start = 4 if b1 & 1 else 6
+    if length < side_info_start + side_info_size:
+        raise _unsupported(f"invalid frame header at byte {offset}")
+    return _Header(version, sample_rate, length, side_info_start, side_info_size)
 
 
 def _is_vbr_header(data: memoryview, offset: int, header: _Header) -> bool:
-    if header.version == _MPEG1:
-        side_info = 17 if header.mono else 32
-    else:
-        side_info = 9 if header.mono else 17
-    xing = offset + 4 + side_info
+    # Encoders place the Xing tag after the side information as if the frame had no checksum.
+    xing = offset + 4 + header.side_info_size
     return bytes(data[xing : xing + 4]) in (b"Xing", b"Info") or bytes(data[offset + 36 : offset + 40]) == b"VBRI"
 
 
