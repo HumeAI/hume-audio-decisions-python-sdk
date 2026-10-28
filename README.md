@@ -37,7 +37,7 @@ Keep API keys on a server. To use the API from a web page, relay through your se
 
 ## Preparing audio
 
-Each request takes one audio file, MP3 or WAV, up to 5 minutes long. To evaluate several recordings, send one request per file. The service mixes all channels into one, so to judge one speaker in a call alone, send that speaker's channel as its own file.
+Each request takes one audio file, MP3 or WAV, up to 5 minutes long. To evaluate several recordings, send one request per file. To evaluate a longer recording, split it into chunks as described in [Long recordings](#long-recordings). The service mixes all channels into one, so to judge one speaker in a call alone, send that speaker's channel as its own file.
 
 ## Quickstart
 
@@ -170,6 +170,79 @@ async def main() -> None:
 
 asyncio.run(main())
 ```
+
+## Long recordings
+
+`decisions.create_chunked` splits a recording longer than 5 minutes into chunks and sends each chunk as a separate `create` request, so each chunk has its own `run_id` and is billed on its own. The answers are not combined across chunks: you get one response per chunk.
+
+```python
+from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment
+
+client = DecisionsClient()
+
+with open("long_call.wav", "rb") as audio:
+    result = client.decisions.create_chunked(
+        file=("long_call.wav", audio, "audio/wav"),
+        request=DecisionsRequest(
+            questions={"agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?")},
+        ),
+        chunk_ms=300_000,
+    )
+
+for chunk in result.chunks:
+    if chunk.response is None:
+        print(f"chunk {chunk.index} ({chunk.start_ms} to {chunk.end_ms} ms): {chunk.status}, {chunk.error}")
+        continue
+    answer = chunk.response.answers["agent_glitches"]
+    if isinstance(answer, Answer_Moment):
+        for moment in answer.moments:
+            # Moments are measured from the start of the chunk.
+            print(f"{chunk.start_ms + moment.audio_start_ms} to {chunk.start_ms + moment.audio_end_ms} ms")
+```
+
+Every request asks the same questions with the same context, and `request_options` applies to each one. `chunk_ms` sets the length of each chunk, up to 300000, and `start_ms` and `end_ms` limit the job to part of the recording. Each chunk's `start_ms` and `end_ms` give where it actually starts and ends in the recording, so add the chunk's `start_ms` to a moment's times to place the moment in the recording.
+
+The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
+
+1. A WAV file is cut between samples.
+2. An MP3 file is cut between frames, which last 24 to 72 ms, so a chunk can be up to one frame shorter than `chunk_ms`. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered.
+
+Chunks are sent one at a time, in order, and a failed request does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
+
+1. A chunk whose audio cannot be decoded (`audio_decode_failed`) fails on its own, and the remaining chunks are still sent.
+2. Any other error stops the job, such as running out of tokens (402), an invalid request, or a dropped connection. The chunks after it have the status `not_attempted`: no request was sent for them, so they were not billed.
+3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `max_retries` in `request_options` to allow more.
+
+To resume a job that stopped, call `create_chunked` again with `start_ms` set to the `end_ms` of the chunk before the one that stopped it.
+
+`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way, for example several at a time with the async client:
+
+```python
+import asyncio
+
+from hume_decisions import AsyncDecisionsClient
+from hume_decisions.audio_helpers import iter_audio_chunks
+
+
+async def main() -> None:
+    client = AsyncDecisionsClient()
+    limit = asyncio.Semaphore(4)
+
+    async def send(chunk):
+        async with limit:
+            return await client.decisions.create(file=("chunk.wav", chunk.data, "audio/wav"), request=request)
+
+    with open("long_call.wav", "rb") as audio:
+        chunks = list(iter_audio_chunks(audio, chunk_ms=300_000))
+    responses = await asyncio.gather(*(send(chunk) for chunk in chunks), return_exceptions=True)
+    for chunk, response in zip(chunks, responses):
+        print(chunk.index, chunk.start_ms, response)
+
+
+asyncio.run(main())
+```
+
+Sending several chunks at once reaches rate limits sooner, and a failure does not stop the requests already in flight, which are still billed. `create_chunked` sends one chunk at a time for these reasons.
 
 ## Runs
 
