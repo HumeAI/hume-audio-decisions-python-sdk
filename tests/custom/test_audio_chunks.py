@@ -1,6 +1,8 @@
 import io
+import os
 import random
 import struct
+import threading
 import typing
 import wave
 
@@ -268,3 +270,62 @@ def test_range_bound_that_is_not_an_integer_is_rejected(name: str) -> None:
 
     with pytest.raises(TypeError, match=f"{name} must be an integer, got 0.5"):
         iter_audio_chunks(recording, chunk_ms=1000, **{name: typing.cast(typing.Any, 0.5)})
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        lambda recording: ("call.wav", recording),
+        lambda recording: ("call.wav", recording, "audio/wav"),
+        lambda recording: ("call.wav", io.BytesIO(recording), "audio/wav", {"X-Test": "1"}),
+        lambda recording: (None, io.BytesIO(recording)),
+    ],
+)
+def test_file_given_as_a_tuple_gives_the_same_chunks_as_its_bytes(
+    wrap: typing.Callable[[bytes], typing.Any],
+) -> None:
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
+
+    chunks = list(iter_audio_chunks(wrap(recording), chunk_ms=1000))
+
+    assert chunks == list(iter_audio_chunks(recording, chunk_ms=1000))
+
+
+def test_file_object_is_read_from_its_start_and_left_open() -> None:
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
+    file = io.BytesIO(recording)
+    file.seek(100)
+
+    chunks = list(iter_audio_chunks(file, chunk_ms=1000))
+
+    assert chunks == list(iter_audio_chunks(recording, chunk_ms=1000))
+    assert not file.closed
+
+
+def test_file_object_that_cannot_seek_such_as_a_pipe_is_read() -> None:
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(100 * 16 * 2))
+    read_fd, write_fd = os.pipe()
+
+    def write() -> None:
+        with open(write_fd, "wb") as pipe:
+            pipe.write(recording)
+
+    writer = threading.Thread(target=write)
+    writer.start()
+    with open(read_fd, "rb") as pipe:
+        chunks = list(iter_audio_chunks(pipe, chunk_ms=50))
+    writer.join()
+
+    assert chunks == list(iter_audio_chunks(recording, chunk_ms=50))
+
+
+def test_path_given_as_a_str_is_rejected_with_an_explanation() -> None:
+    with pytest.raises(ValueError, match="given as a str, which is read as the file's contents rather than a path"):
+        iter_audio_chunks("call.wav", chunk_ms=1000)
+
+
+def test_unsupported_bytes_are_rejected_without_mentioning_str() -> None:
+    with pytest.raises(ValueError) as error:
+        iter_audio_chunks(b"call.wav", chunk_ms=1000)
+
+    assert "str" not in str(error.value)

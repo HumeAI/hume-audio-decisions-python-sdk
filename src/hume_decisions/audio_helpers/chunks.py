@@ -1,9 +1,11 @@
 # Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import dataclasses
+import io
 import operator
 import typing
 
+from ..core.file import File
 from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 
 # The Decisions API accepts audio up to 5 minutes long.
@@ -37,7 +39,7 @@ class AudioChunk:
 
 
 def iter_audio_chunks(
-    file: bytes,
+    file: File,
     *,
     chunk_ms: int,
     start_ms: typing.Optional[int] = None,
@@ -55,9 +57,11 @@ def iter_audio_chunks(
 
     Parameters
     ----------
-    file : bytes
-        The recording, a WAV file. Integer PCM (8, 16, 24 or 32-bit) and floating point (32 or
-        64-bit) are supported, with either the basic or the extensible WAV header.
+    file : core.File
+        The recording, a WAV file, in any form `create` accepts. Integer PCM (8, 16, 24 or 32-bit)
+        and floating point (32 or 64-bit) are supported, with either the basic or the extensible
+        WAV header. A file object is read in full from its start and left open. A `str` is the
+        file's contents, not a path.
 
     chunk_ms : int
         Duration of each chunk in milliseconds, from 1 to 300000.
@@ -87,8 +91,8 @@ def iter_audio_chunks(
     from hume_decisions.audio_helpers import iter_audio_chunks
 
     with open("call.wav", "rb") as f:
-        recording = f.read()
-    for chunk in iter_audio_chunks(recording, chunk_ms=60_000):
+        chunks = iter_audio_chunks(f, chunk_ms=60_000)
+    for chunk in chunks:
         print(chunk.index, chunk.start_ms, chunk.end_ms, len(chunk.data))
     """
     chunk_ms = _check_integer("chunk_ms", chunk_ms)
@@ -102,9 +106,15 @@ def iter_audio_chunks(
         end_ms = _check_integer("end_ms", end_ms)
         if end_ms <= (start_ms or 0):
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
-    data = memoryview(file)
+    data, given_as_str = _read(file)
     if not is_wav(data):
-        raise ValueError("Unsupported audio format. Only WAV files can be split into chunks.")
+        message = "Unsupported audio format. Only WAV files can be split into chunks."
+        if given_as_str:
+            message += (
+                " The file was given as a str, which is read as the file's contents rather than a path."
+                " Open the file in binary mode and pass the file object or its bytes."
+            )
+        raise ValueError(message)
     audio = parse_wav(data)
     if audio.sample_count == 0:
         raise ValueError("The audio is empty.")
@@ -119,6 +129,20 @@ def iter_audio_chunks(
     elif end_ms > duration_ms:
         raise ValueError(f"end_ms must not exceed the recording's duration of {duration_ms} ms, got {end_ms}.")
     return _iter_wav_chunks(data, audio, chunk_ms, start_ms, end_ms)
+
+
+def _read(file: File) -> typing.Tuple[memoryview, bool]:
+    content = file[1] if isinstance(file, tuple) else file
+    if not isinstance(content, (str, bytes)):
+        # Read the way httpx reads a file it uploads, so the chunks cover what `create` would send.
+        try:
+            content.seek(0)
+        except (AttributeError, io.UnsupportedOperation):
+            pass
+        content = content.read()
+    if isinstance(content, str):
+        return memoryview(content.encode("utf-8")), True
+    return memoryview(content), False
 
 
 def _iter_wav_chunks(
