@@ -29,9 +29,9 @@ class RunSummary(UniversalBaseModel):
     When the run started.
     """
 
-    ended_at: typing.Optional[dt.datetime] = pydantic.Field(default=None)
+    ended_at: dt.datetime = pydantic.Field()
     """
-    When the run ended. Null while it is in progress.
+    When the run ended.
     """
 
     bytes_received: int = pydantic.Field()
