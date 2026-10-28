@@ -12,5 +12,191 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 52fe390b2ce8450c351bb009f71de3882c42e9f5
-patches: []
+  - commit_sha: eb69ef808c8ae7aed1a0bf4cd1d1969704d6f5c4
+    tree_hash: 0d806fec0fb177c098bc9bed82893b757dc64b13
+    timestamp: 2026-10-28T16:26:05.578Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: eb69ef808c8ae7aed1a0bf4cd1d1969704d6f5c4
+patches:
+  - id: patch-95641ac3
+    content_hash: sha256:403ea10ce493e9ac9a8b1399a47174519036f388936b890f53162da0e88d9d1e
+    original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
+    original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
+    original_author: zach <zachary.greathouse@hume.ai>
+    base_generation: eb69ef808c8ae7aed1a0bf4cd1d1969704d6f5c4
+    files:
+      - .github/workflows/ci.yml
+    patch_content: |
+      diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+      index e343440..adaf87e 100644
+      --- a/.github/workflows/ci.yml
+      +++ b/.github/workflows/ci.yml
+      @@ -46,9 +46,8 @@ jobs:
+             - name: Test (aiohttp)
+               run: poetry run pytest -rP -n auto -m aiohttp .
+       
+      -  publish:
+      -    needs: [compile, test]
+      -    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      +  build:
+      +    name: Build distribution
+           runs-on: ubuntu-latest
+           steps:
+             - name: Checkout repo
+      @@ -62,10 +61,43 @@ jobs:
+                 curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+             - name: Install dependencies
+               run: poetry install
+      -      - name: Publish to pypi
+      +      - name: Build package
+      +        run: poetry build
+      +      - name: Store the distribution packages
+      +        uses: actions/upload-artifact@v4
+      +        with:
+      +          name: python-package-distributions
+      +          path: dist/
+      +
+      +  publish:
+      +    name: Publish to PyPI
+      +    needs: [compile, test, build]
+      +    # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+      +    # not release the package.
+      +    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      +    runs-on: ubuntu-latest
+      +    environment:
+      +      name: pypi
+      +      url: https://pypi.org/p/hume-decisions
+      +    permissions:
+      +      contents: read   # Required for checkout
+      +      id-token: write  # Required for OIDC
+      +    steps:
+      +      - name: Download all the dists
+      +        uses: actions/download-artifact@v4
+      +        with:
+      +          name: python-package-distributions
+      +          path: dist/
+      +      # A published version can never be published again, so a tag on the wrong commit must fail
+      +      # here rather than release whatever version that commit holds.
+      +      - name: Check the tag matches the package version
+               run: |
+      -          poetry config repositories.remote https://upload.pypi.org/legacy/
+      -          poetry --no-interaction -v publish --build --repository remote --username "$PYPI_USERNAME" --password "$OIDC"
+      -        env:
+      -          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      -          OIDC: ${{ secrets.OIDC }}
+      +          PKG_VERSION=$(basename dist/*.whl | cut -d- -f2)
+      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+      +            exit 1
+      +          fi
+      +      - name: Publish to pypi with attestations
+      +        uses: pypa/gh-action-pypi-publish@release/v1
+      +        with:
+      +          repository-url: https://upload.pypi.org/legacy/
+    theirs_snapshot:
+      .github/workflows/ci.yml: |
+        name: ci
+        on: [push]
+
+        concurrency:
+          group: ${{ github.workflow }}-${{ github.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          compile:
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+              - name: Compile
+                run: poetry run mypy .
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+
+              - name: Test
+                run: poetry run pytest -rP -n auto .
+
+              - name: Install aiohttp extra
+                run: poetry install --extras aiohttp
+
+              - name: Test (aiohttp)
+                run: poetry run pytest -rP -n auto -m aiohttp .
+
+          build:
+            name: Build distribution
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+              - name: Build package
+                run: poetry build
+              - name: Store the distribution packages
+                uses: actions/upload-artifact@v4
+                with:
+                  name: python-package-distributions
+                  path: dist/
+
+          publish:
+            name: Publish to PyPI
+            needs: [compile, test, build]
+            # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+            # not release the package.
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            runs-on: ubuntu-latest
+            environment:
+              name: pypi
+              url: https://pypi.org/p/hume-decisions
+            permissions:
+              contents: read   # Required for checkout
+              id-token: write  # Required for OIDC
+            steps:
+              - name: Download all the dists
+                uses: actions/download-artifact@v4
+                with:
+                  name: python-package-distributions
+                  path: dist/
+              # A published version can never be published again, so a tag on the wrong commit must fail
+              # here rather than release whatever version that commit holds.
+              - name: Check the tag matches the package version
+                run: |
+                  PKG_VERSION=$(basename dist/*.whl | cut -d- -f2)
+                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+                    exit 1
+                  fi
+              - name: Publish to pypi with attestations
+                uses: pypa/gh-action-pypi-publish@release/v1
+                with:
+                  repository-url: https://upload.pypi.org/legacy/
