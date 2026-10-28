@@ -40,7 +40,7 @@ class RunsClient:
         """
         Your organization's runs, newest first, one page at a time. The filters combine.
 
-        A run is one model inference. Every successful decisions request has a run. A decisions request that fails before its input reaches the model, including every request rejected with a `4xx` status, has none.
+        A run is one model inference. A successful decisions request is recorded as a run, which can take a moment to appear in this list, and under heavy load may not be recorded. A decisions request that fails before its input reaches the model, including every request rejected with a `4xx` status, has none.
 
         Parameters
         ----------
@@ -151,7 +151,7 @@ class AsyncRunsClient:
         """
         Your organization's runs, newest first, one page at a time. The filters combine.
 
-        A run is one model inference. Every successful decisions request has a run. A decisions request that fails before its input reaches the model, including every request rejected with a `4xx` status, has none.
+        A run is one model inference. A successful decisions request is recorded as a run, which can take a moment to appear in this list, and under heavy load may not be recorded. A decisions request that fails before its input reaches the model, including every request rejected with a `4xx` status, has none.
 
         Parameters
         ----------

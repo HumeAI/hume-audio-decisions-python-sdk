@@ -2,4 +2,4 @@
 
 import typing
 
-RunStatus = typing.Union[typing.Literal["live", "ended", "errored"], typing.Any]
+RunStatus = typing.Union[typing.Literal["ended", "errored"], typing.Any]

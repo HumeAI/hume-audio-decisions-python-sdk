@@ -14,7 +14,7 @@ class DecisionsResponse(UniversalBaseModel):
 
     run_id: str = pydantic.Field()
     """
-    Identifies the run this request was recorded as. Pass it to the run endpoints to look the run up.
+    Identifies this request's run. Pass it to the run endpoints to look the run up. A run can take a moment to appear, and under heavy load may not be recorded.
     """
 
     answers: Answers
