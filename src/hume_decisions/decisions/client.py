@@ -146,6 +146,8 @@ class DecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
+        A failed request does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+
         Parameters
         ----------
         request : DecisionsRequest
@@ -169,7 +171,7 @@ class DecisionsClient:
         Returns
         -------
         ChunkedDecisionsResult
-            Each chunk's position in the recording and its response, in the order of the chunks.
+            Each chunk's position in the recording and its response or error, in the order of the chunks.
 
         Raises
         ------
@@ -198,6 +200,8 @@ class DecisionsClient:
         for chunk in result.chunks:
             if chunk.response is not None:
                 print(chunk.start_ms, chunk.response.run_id)
+            else:
+                print(chunk.start_ms, chunk.status, chunk.error)
         """
         return send_chunks(
             lambda chunk: self.create(request=request, file=chunk, request_options=request_options),

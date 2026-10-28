@@ -10,8 +10,9 @@ import wave
 import httpx
 import pytest
 
-from hume_decisions import DecisionsClient, DecisionsRequest, Question_Noul
+from hume_decisions import BadRequestError, DecisionsClient, DecisionsRequest, Question_Noul, TooManyRequestsError
 from hume_decisions.audio_helpers import iter_audio_chunks
+from hume_decisions.core import ApiError
 
 _REQUEST = DecisionsRequest(
     context="A test call.",
@@ -35,13 +36,26 @@ def _parts(request: httpx.Request) -> typing.Dict[str, email.message.Message]:
     return {typing.cast(str, part.get_param("name", header="content-disposition")): part for part in message.walk()}
 
 
-def _client(requests: typing.List[httpx.Request]) -> DecisionsClient:
+def _succeeded(number: int) -> httpx.Response:
+    return httpx.Response(
+        200, json={"run_id": f"run-{number}", "answers": {"talks_over_caller": {"type": "noul", "noul": 0.5}}}
+    )
+
+
+def _failed(status: int, code: str, headers: typing.Optional[typing.Dict[str, str]] = None) -> httpx.Response:
+    return httpx.Response(
+        status, headers=headers, json={"type": "error", "code": code, "message": code, "request_id": "req"}
+    )
+
+
+def _client(
+    requests: typing.List[httpx.Request],
+    respond: typing.Callable[[int], httpx.Response] = _succeeded,
+) -> DecisionsClient:
+    # `respond` receives the number of the request, starting at 1, counting retries.
     def handle(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        return httpx.Response(
-            200,
-            json={"run_id": f"run-{len(requests)}", "answers": {"talks_over_caller": {"type": "noul", "noul": 0.5}}},
-        )
+        return respond(len(requests))
 
     return DecisionsClient(api_key="test", httpx_client=httpx.Client(transport=httpx.MockTransport(handle)))
 
@@ -112,3 +126,82 @@ def test_sends_nothing_when_the_recording_cannot_be_split() -> None:
         _client(requests).decisions.create_chunked(request=_REQUEST, file=_wav(2000), chunk_ms=1000, end_ms=2500)
 
     assert requests == []
+
+
+def test_continues_after_a_chunk_whose_audio_cannot_be_decoded() -> None:
+    requests: typing.List[httpx.Request] = []
+
+    result = _client(
+        requests, lambda number: _failed(400, "audio_decode_failed") if number == 2 else _succeeded(number)
+    ).decisions.create_chunked(request=_REQUEST, file=_wav(3000), chunk_ms=1000)
+
+    assert len(requests) == 3
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "succeeded"]
+    assert isinstance(result.chunks[1].error, BadRequestError)
+    assert [response.run_id if response else None for response in result.responses] == ["run-1", None, "run-3"]
+    assert not result.complete
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param(_failed(402, "payment_required"), id="out of tokens"),
+        pytest.param(_failed(400, "question_invalid"), id="invalid request"),
+        pytest.param(_failed(400, "a_code_added_later"), id="unknown code"),
+    ],
+)
+def test_stops_at_any_other_error_and_records_the_rest_as_not_attempted(failure: httpx.Response) -> None:
+    requests: typing.List[httpx.Request] = []
+
+    result = _client(requests, lambda number: failure if number == 2 else _succeeded(number)).decisions.create_chunked(
+        request=_REQUEST, file=_wav(4000), chunk_ms=1000
+    )
+
+    assert len(requests) == 2
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted", "not_attempted"]
+    assert isinstance(result.chunks[1].error, ApiError)
+    assert [(c.start_ms, c.end_ms, c.error) for c in result.chunks[2:]] == [(2000, 3000, None), (3000, 4000, None)]
+    assert result.responses[0] is not None
+    assert not result.complete
+
+
+def test_stops_when_the_connection_drops() -> None:
+    requests: typing.List[httpx.Request] = []
+
+    def respond(number: int) -> httpx.Response:
+        if number == 2:
+            raise httpx.RemoteProtocolError("Server disconnected")
+        return _succeeded(number)
+
+    result = _client(requests, respond).decisions.create_chunked(request=_REQUEST, file=_wav(3000), chunk_ms=1000)
+
+    assert len(requests) == 2
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted"]
+    assert isinstance(result.chunks[1].error, httpx.RemoteProtocolError)
+
+
+def test_retries_a_rate_limited_chunk_before_moving_on() -> None:
+    requests: typing.List[httpx.Request] = []
+    rate_limited = _failed(429, "rate_limited", headers={"retry-after-ms": "1"})
+
+    result = _client(
+        requests, lambda number: rate_limited if number == 2 else _succeeded(number)
+    ).decisions.create_chunked(request=_REQUEST, file=_wav(2000), chunk_ms=1000)
+
+    assert len(requests) == 3
+    assert _parts(requests[1])["file"].get_payload(decode=True) == _parts(requests[2])["file"].get_payload(decode=True)
+    assert [response.run_id if response else None for response in result.responses] == ["run-1", "run-3"]
+    assert result.complete
+
+
+def test_stops_when_rate_limit_retries_run_out() -> None:
+    requests: typing.List[httpx.Request] = []
+    rate_limited = _failed(429, "rate_limited", headers={"retry-after-ms": "1"})
+
+    result = _client(
+        requests, lambda number: rate_limited if number >= 2 else _succeeded(number)
+    ).decisions.create_chunked(request=_REQUEST, file=_wav(3000), chunk_ms=1000, request_options={"max_retries": 1})
+
+    assert len(requests) == 3
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted"]
+    assert isinstance(result.chunks[1].error, TooManyRequestsError)
