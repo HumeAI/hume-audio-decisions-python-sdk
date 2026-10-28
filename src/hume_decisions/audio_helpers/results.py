@@ -1,5 +1,6 @@
 # Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import asyncio
 import dataclasses
 import typing
 
@@ -93,6 +94,32 @@ def send_chunks(
         if not stopped:
             try:
                 response = create(_with_content(file, chunk.data))
+            except Exception as raised:
+                error = raised
+                stopped = not _fails_only_this_chunk(raised)
+        results.append(ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error))
+    return ChunkedDecisionsResult(tuple(results))
+
+
+async def send_chunks_async(
+    create: typing.Callable[[File], typing.Awaitable[DecisionsResponse]],
+    file: File,
+    *,
+    chunk_ms: int,
+    start_ms: typing.Optional[int],
+    end_ms: typing.Optional[int],
+) -> ChunkedDecisionsResult:
+    # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
+    # thread to keep the event loop free.
+    chunks = await asyncio.to_thread(iter_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    results = []
+    stopped = False
+    for chunk in chunks:
+        response: typing.Optional[DecisionsResponse] = None
+        error: typing.Optional[Exception] = None
+        if not stopped:
+            try:
+                response = await create(_with_content(file, chunk.data))
             except Exception as raised:
                 error = raised
                 stopped = not _fails_only_this_chunk(raised)
