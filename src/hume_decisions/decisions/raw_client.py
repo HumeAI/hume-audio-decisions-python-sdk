@@ -63,7 +63,7 @@ class RawDecisionsClient:
         | Whether something is true of the audio | `noul` | The share of raters who would answer yes |
         | Which of several options applies | `choice` | The probability of each option, and the most likely one |
         | Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-        | When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+        | When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
 
         ## Using the answers
 
@@ -412,7 +412,7 @@ class AsyncRawDecisionsClient:
         | Whether something is true of the audio | `noul` | The share of raters who would answer yes |
         | Which of several options applies | `choice` | The probability of each option, and the most likely one |
         | Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-        | When an event occurs | `span` | The time spans where the event may occur, in milliseconds from the start of the file |
+        | When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
 
         ## Using the answers
 

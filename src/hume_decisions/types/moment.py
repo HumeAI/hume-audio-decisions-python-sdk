@@ -4,17 +4,26 @@ import typing
 
 import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
-from .span import Span
 
 
-class SpanAnswer(UniversalBaseModel):
+class Moment(UniversalBaseModel):
     """
-    The answer to a `span` question.
+    A moment where the described event may occur.
     """
 
-    spans: typing.List[Span] = pydantic.Field()
+    audio_start_ms: int = pydantic.Field()
     """
-    The time spans where the described event may occur, in order of `audio_start_ms`. Overlapping candidates are merged. An empty array means the event was not found.
+    Where the moment begins, in milliseconds from the start of the audio file.
+    """
+
+    audio_end_ms: int = pydantic.Field()
+    """
+    Where the moment ends, in milliseconds from the start of the audio file.
+    """
+
+    probability: float = pydantic.Field()
+    """
+    The probability that the event occurs in the moment.
     """
 
     if IS_PYDANTIC_V2:

@@ -68,12 +68,12 @@ class Question_Score(UniversalBaseModel):
             extra = pydantic.Extra.allow
 
 
-class Question_Span(UniversalBaseModel):
+class Question_Moment(UniversalBaseModel):
     """
     A question. `type` names its primitive, which determines the question's options and the structure of its answer.
     """
 
-    type: typing.Literal["span"] = "span"
+    type: typing.Literal["moment"] = "moment"
     instructions: str
 
     if IS_PYDANTIC_V2:
@@ -87,5 +87,5 @@ class Question_Span(UniversalBaseModel):
 
 
 Question = typing_extensions.Annotated[
-    typing.Union[Question_Noul, Question_Choice, Question_Score, Question_Span], pydantic.Field(discriminator="type")
+    typing.Union[Question_Noul, Question_Choice, Question_Score, Question_Moment], pydantic.Field(discriminator="type")
 ]

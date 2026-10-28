@@ -7,7 +7,7 @@ import typing
 import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
-from .span import Span
+from .moment import Moment
 
 
 class Answer_Noul(UniversalBaseModel):
@@ -69,13 +69,13 @@ class Answer_Score(UniversalBaseModel):
             extra = pydantic.Extra.allow
 
 
-class Answer_Span(UniversalBaseModel):
+class Answer_Moment(UniversalBaseModel):
     """
     The answer to one question. `type` names the question's primitive and determines the answer's fields. Treat an unrecognized `type` as unknown rather than as an error.
     """
 
-    type: typing.Literal["span"] = "span"
-    spans: typing.List[Span]
+    type: typing.Literal["moment"] = "moment"
+    moments: typing.List[Moment]
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
@@ -88,5 +88,5 @@ class Answer_Span(UniversalBaseModel):
 
 
 Answer = typing_extensions.Annotated[
-    typing.Union[Answer_Noul, Answer_Choice, Answer_Score, Answer_Span], pydantic.Field(discriminator="type")
+    typing.Union[Answer_Noul, Answer_Choice, Answer_Score, Answer_Moment], pydantic.Field(discriminator="type")
 ]

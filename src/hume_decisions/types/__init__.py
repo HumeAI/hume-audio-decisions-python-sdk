@@ -6,7 +6,7 @@ import typing
 from importlib import import_module
 
 if typing.TYPE_CHECKING:
-    from .answer import Answer, Answer_Choice, Answer_Noul, Answer_Score, Answer_Span
+    from .answer import Answer, Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
     from .answers import Answers
     from .authentication_error import AuthenticationError
     from .choice_answer import ChoiceAnswer
@@ -19,10 +19,13 @@ if typing.TYPE_CHECKING:
     from .error_code import ErrorCode
     from .error_type import ErrorType
     from .input_tokens_response import InputTokensResponse
+    from .moment import Moment
+    from .moment_answer import MomentAnswer
+    from .moment_question import MomentQuestion
     from .noul_answer import NoulAnswer
     from .noul_criteria import NoulCriteria
     from .noul_question import NoulQuestion
-    from .question import Question, Question_Choice, Question_Noul, Question_Score, Question_Span
+    from .question import Question, Question_Choice, Question_Moment, Question_Noul, Question_Score
     from .questions import Questions
     from .run import Run
     from .run_status import RunStatus
@@ -30,15 +33,12 @@ if typing.TYPE_CHECKING:
     from .runs_page import RunsPage
     from .score_answer import ScoreAnswer
     from .score_question import ScoreQuestion
-    from .span import Span
-    from .span_answer import SpanAnswer
-    from .span_question import SpanQuestion
 _dynamic_imports: typing.Dict[str, str] = {
     "Answer": ".answer",
     "Answer_Choice": ".answer",
+    "Answer_Moment": ".answer",
     "Answer_Noul": ".answer",
     "Answer_Score": ".answer",
-    "Answer_Span": ".answer",
     "Answers": ".answers",
     "AuthenticationError": ".authentication_error",
     "ChoiceAnswer": ".choice_answer",
@@ -51,14 +51,17 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ErrorCode": ".error_code",
     "ErrorType": ".error_type",
     "InputTokensResponse": ".input_tokens_response",
+    "Moment": ".moment",
+    "MomentAnswer": ".moment_answer",
+    "MomentQuestion": ".moment_question",
     "NoulAnswer": ".noul_answer",
     "NoulCriteria": ".noul_criteria",
     "NoulQuestion": ".noul_question",
     "Question": ".question",
     "Question_Choice": ".question",
+    "Question_Moment": ".question",
     "Question_Noul": ".question",
     "Question_Score": ".question",
-    "Question_Span": ".question",
     "Questions": ".questions",
     "Run": ".run",
     "RunStatus": ".run_status",
@@ -66,9 +69,6 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RunsPage": ".runs_page",
     "ScoreAnswer": ".score_answer",
     "ScoreQuestion": ".score_question",
-    "Span": ".span",
-    "SpanAnswer": ".span_answer",
-    "SpanQuestion": ".span_question",
 }
 
 
@@ -96,9 +96,9 @@ def __dir__():
 __all__ = [
     "Answer",
     "Answer_Choice",
+    "Answer_Moment",
     "Answer_Noul",
     "Answer_Score",
-    "Answer_Span",
     "Answers",
     "AuthenticationError",
     "ChoiceAnswer",
@@ -111,14 +111,17 @@ __all__ = [
     "ErrorCode",
     "ErrorType",
     "InputTokensResponse",
+    "Moment",
+    "MomentAnswer",
+    "MomentQuestion",
     "NoulAnswer",
     "NoulCriteria",
     "NoulQuestion",
     "Question",
     "Question_Choice",
+    "Question_Moment",
     "Question_Noul",
     "Question_Score",
-    "Question_Span",
     "Questions",
     "Run",
     "RunStatus",
@@ -126,7 +129,4 @@ __all__ = [
     "RunsPage",
     "ScoreAnswer",
     "ScoreQuestion",
-    "Span",
-    "SpanAnswer",
-    "SpanQuestion",
 ]
