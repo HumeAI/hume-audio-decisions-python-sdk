@@ -1,0 +1,203 @@
+import struct
+import typing
+
+import pytest
+
+from hume_decisions.audio_helpers import iter_audio_chunks
+
+_MPEG1 = 3
+_MPEG2 = 2
+_MPEG25 = 0
+
+
+def _frame(
+    number: int,
+    *,
+    version: int = _MPEG1,
+    bitrate_index: int = 9,
+    sample_rate_index: int = 0,
+    padding: int = 0,
+    layer: int = 1,
+    mono: bool = False,
+    length: int = 417,
+) -> bytes:
+    """Builds an MP3 frame of `length` bytes whose body identifies it by `number`."""
+    header = bytes(
+        [
+            0xFF,
+            0xE0 | version << 3 | layer << 1 | 1,
+            bitrate_index << 4 | sample_rate_index << 2 | padding << 1,
+            (3 if mono else 0) << 6,
+        ]
+    )
+    body = struct.pack(">I", number) * (length // 4)
+    return header + body[: length - 4]
+
+
+def _frames(count: int, **kwargs: typing.Any) -> typing.List[bytes]:
+    return [_frame(number, **kwargs) for number in range(count)]
+
+
+def _id3v2(size: int, *, footer: bool = False) -> bytes:
+    syncsafe = bytes([size >> 21 & 0x7F, size >> 14 & 0x7F, size >> 7 & 0x7F, size & 0x7F])
+    tag = b"ID3\x04\x00" + bytes([0x10 if footer else 0]) + syncsafe + b"\x00" * size
+    return tag + (b"3DI\x04\x00\x10" + syncsafe if footer else b"")
+
+
+def _vbr_frame(marker: bytes, offset: int, *, mono: bool = False) -> bytes:
+    frame = bytearray(_frame(0, mono=mono))
+    frame[offset : offset + 4] = marker
+    return bytes(frame)
+
+
+def test_mp3_is_split_between_frames_into_chunks_no_longer_than_requested() -> None:
+    # MPEG-1 frames at 44.1 kHz hold 1152 samples, about 26.12 ms, so 38 fit in a second.
+    frames = _frames(100)
+
+    chunks = list(iter_audio_chunks(b"".join(frames), chunk_ms=1000))
+
+    assert [(c.index, c.start_ms, c.end_ms) for c in chunks] == [(0, 0, 993), (1, 993, 1985), (2, 1985, 2612)]
+    assert [c.data for c in chunks] == [b"".join(frames[:38]), b"".join(frames[38:76]), b"".join(frames[76:])]
+
+
+def test_mp3_chunks_of_the_maximum_duration_stay_within_five_minutes() -> None:
+    # 32 kbit/s frames at 44.1 kHz are 104 bytes long.
+    frames = _frames(12000, bitrate_index=1, length=104)
+
+    chunks = list(iter_audio_chunks(b"".join(frames), chunk_ms=300_000))
+
+    assert chunks[0].data == b"".join(frames[:11484])
+    assert chunks[0].end_ms == 299_990
+
+
+@pytest.mark.parametrize(
+    ("version", "sample_rate_index", "length", "chunk_ms", "times"),
+    [
+        # MPEG-2 frames at 22,050 Hz hold 576 samples, about 26.12 ms.
+        (_MPEG2, 0, 208, 262, [(0, 261), (261, 522)]),
+        # MPEG-2.5 frames at 8 kHz hold 576 samples, 72 ms.
+        (_MPEG25, 2, 576, 720, [(0, 720), (720, 1440)]),
+    ],
+)
+def test_mpeg_2_and_2_5_frames_are_timed_at_576_samples(
+    version: int, sample_rate_index: int, length: int, chunk_ms: int, times: typing.List[typing.Tuple[int, int]]
+) -> None:
+    # Bitrate index 8 is 64 kbit/s for MPEG-2 and 2.5.
+    frames = _frames(20, version=version, bitrate_index=8, sample_rate_index=sample_rate_index, length=length)
+
+    chunks = list(iter_audio_chunks(b"".join(frames), chunk_ms=chunk_ms))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == times
+    assert b"".join(c.data for c in chunks) == b"".join(frames)
+
+
+def test_padded_frames_are_one_byte_longer() -> None:
+    frames = [_frame(n, padding=n % 2, length=417 + n % 2) for n in range(10)]
+
+    chunks = list(iter_audio_chunks(b"".join(frames), chunk_ms=60))
+
+    assert [c.data for c in chunks] == [b"".join(frames[i : i + 2]) for i in range(0, 10, 2)]
+
+
+@pytest.mark.parametrize("footer", [False, True])
+def test_tags_are_left_out_of_the_chunks(footer: bool) -> None:
+    frames = _frames(10)
+    id3v1 = b"TAG" + b"\x00" * 125
+    recording = _id3v2(300, footer=footer) + _id3v2(20) + b"".join(frames) + b"APETAGEX" + b"\x00" * 24 + id3v1
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert [c.data for c in chunks] == [b"".join(frames)]
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        _vbr_frame(b"Xing", 36),
+        _vbr_frame(b"Info", 36),
+        _vbr_frame(b"VBRI", 36),
+        # The side information before a Xing header is shorter in a mono frame.
+        _vbr_frame(b"Xing", 21, mono=True),
+    ],
+)
+def test_header_frame_stating_the_whole_files_length_is_left_out(header: bytes) -> None:
+    frames = _frames(10)
+
+    chunks = list(iter_audio_chunks(header + b"".join(frames), chunk_ms=1000))
+
+    assert [c.data for c in chunks] == [b"".join(frames)]
+    assert chunks[0].end_ms == 261
+
+
+def test_mp3_cut_off_partway_through_a_frame_is_read_to_the_last_whole_frame() -> None:
+    frames = _frames(10)
+
+    chunks = list(iter_audio_chunks(b"".join(frames) + frames[0][:200], chunk_ms=1000))
+
+    assert [c.data for c in chunks] == [b"".join(frames)]
+
+
+def test_mp3_range_moves_to_the_nearest_frame_boundary() -> None:
+    frames = _frames(100)
+
+    # 990 ms is 37.9 frames in and 1990 ms is 76.2 frames in.
+    chunks = list(iter_audio_chunks(b"".join(frames), chunk_ms=1000, start_ms=990, end_ms=1990))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(993, 1985)]
+    assert chunks[0].data == b"".join(frames[38:76])
+
+
+def test_mp3_range_from_a_chunks_reported_times_selects_that_chunk() -> None:
+    recording = b"".join(_frames(100))
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    again = [
+        list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=c.start_ms, end_ms=c.end_ms))[0].data for c in chunks
+    ]
+
+    assert again == [c.data for c in chunks]
+
+
+def test_damaged_mp3_is_rejected_before_any_chunk_is_produced() -> None:
+    frames = _frames(100)
+    frames[90] = b"\x00" * len(frames[90])
+
+    with pytest.raises(ValueError, match="no MPEG audio frame at byte 37530"):
+        iter_audio_chunks(b"".join(frames), chunk_ms=1000)
+
+
+@pytest.mark.parametrize(
+    ("recording", "message"),
+    [
+        (b"".join(_frames(10, bitrate_index=0)), "free format"),
+        (b"".join(_frames(10, layer=2)), "layer I and II"),
+        (b"".join(_frames(5) + _frames(5, sample_rate_index=1, length=384)), "sample rate changes at byte 2085"),
+        (_frame(0)[:2] + b"\xf0\x00" + b"\x00" * 413, "invalid frame header at byte 0"),
+        (_id3v2(10), "no MPEG audio frame"),
+    ],
+)
+def test_unsupported_mp3_is_rejected_with_a_conversion_command(recording: bytes, message: str) -> None:
+    with pytest.raises(ValueError, match=message) as error:
+        iter_audio_chunks(recording, chunk_ms=1000)
+
+    assert "ffmpeg -i input.mp3" in str(error.value)
+
+
+def test_mp3_holding_only_a_header_frame_is_rejected_as_empty() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        iter_audio_chunks(_vbr_frame(b"Info", 36), chunk_ms=1000)
+
+
+def test_chunk_duration_shorter_than_one_frame_is_rejected() -> None:
+    with pytest.raises(ValueError, match="chunk_ms must be at least 27 ms"):
+        iter_audio_chunks(b"".join(_frames(10)), chunk_ms=26)
+
+
+def test_mp3_range_shorter_than_one_frame_is_rejected() -> None:
+    with pytest.raises(ValueError, match="start_ms and end_ms must be at least 27 ms apart"):
+        iter_audio_chunks(b"".join(_frames(10)), chunk_ms=1000, start_ms=100, end_ms=110)
+
+
+def test_mp3_range_past_the_end_is_rejected() -> None:
+    with pytest.raises(ValueError, match="end_ms must not exceed the recording's duration of 261 ms"):
+        iter_audio_chunks(b"".join(_frames(10)), chunk_ms=1000, end_ms=262)

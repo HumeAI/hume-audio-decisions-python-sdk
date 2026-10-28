@@ -187,8 +187,8 @@ def test_unsupported_wav_is_rejected_with_a_conversion_command(recording: bytes,
     assert "ffmpeg -i input.wav" in str(error.value)
 
 
-def test_audio_that_is_not_wav_is_rejected() -> None:
-    with pytest.raises(ValueError, match="Only WAV files"):
+def test_audio_that_is_neither_mp3_nor_wav_is_rejected() -> None:
+    with pytest.raises(ValueError, match="Only MP3 and WAV files"):
         iter_audio_chunks(b"OggS" + _pcm(100), chunk_ms=1000)
 
 
