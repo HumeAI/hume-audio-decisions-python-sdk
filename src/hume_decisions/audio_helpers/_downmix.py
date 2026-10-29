@@ -28,9 +28,9 @@ def downmix_wav(
     data: memoryview, wav: WavAudio, strategy: typing.Optional[DownmixStrategy]
 ) -> typing.Tuple[memoryview, WavAudio]:
     """
-    The samples of `wav` resampled to at most MODEL_SAMPLE_RATE and mixed down by `strategy` into one
-    channel of 32-bit floating point, with a description of them, or `data` and `wav` themselves when
-    that would not make the audio smaller.
+    The samples of `wav` mixed down by `strategy` into one channel, with a description of them, or
+    `data` and `wav` themselves when the API would mix the file the same way and converting it would
+    not make it smaller. Resampled audio is at most MODEL_SAMPLE_RATE, in 32-bit floating point.
     """
     # ffmpeg weighs more than two channels by the speaker positions in the header's channel mask and
     # leaves out the LFE channel, so they are sent as they are for the API to mix.
@@ -42,9 +42,15 @@ def downmix_wav(
     # The API converts every sample to 32-bit floating point, so writing that loses nothing and cannot
     # clip, but it is larger than some recordings that the API would convert just the same.
     converted = samples_wav(1, sample_rate, 4, True, count)
-    if count * converted.frame_bytes >= wav.sample_count * wav.frame_bytes:
-        return data, wav
     frames = _frames(data, wav)
+    if strategy == "first_channel" and wav.channels > 1:
+        # The API would mix every channel, so the first is taken out even when that is not smaller. A
+        # copy of its samples is exact, and smaller than resampling it at 16 kHz or below.
+        if wav.sample_count * wav.sample_width <= count * converted.frame_bytes:
+            picked = samples_wav(1, wav.sample_rate, wav.sample_width, wav.is_float, wav.sample_count)
+            return memoryview(frames[:, 0].tobytes()), picked
+    elif count * converted.frame_bytes >= wav.sample_count * wav.frame_bytes:
+        return data, wav
 
     def read(start: int, stop: int) -> _Samples:
         if mixes:

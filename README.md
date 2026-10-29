@@ -39,13 +39,13 @@ Keep API keys on a server. To use the API from a web page, relay through your se
 
 Each request takes one MP3 or WAV file up to 5 minutes long. Send one request per recording, and split a longer recording as described in [Long recordings](#long-recordings).
 
-The model hears audio at 16 kHz in one channel: the API resamples every file and mixes its channels into one before the model processes it. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods, whenever that makes the file smaller. The converted file is 32-bit floating point, the format the API converts every file to, so loud audio is not clipped. `downmix_strategy` sets how:
+The model hears audio at 16 kHz in one channel: the API resamples every file and mixes its channels into one before the model processes it. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods. Resampled audio is written as 32-bit floating point, the format the API converts every file to, so loud audio is not clipped. `downmix_strategy` sets how:
 
-1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz and mixes two channels into one the way the API does, so the model hears the same audio apart from rounding. A file with more than two channels is sent as it is, because the API weighs those channels by the speaker positions its header declares.
-2. `"first_channel"` resamples the same way and keeps only the first channel. Use it to judge one speaker of a call who is on the first channel; for any other channel, send that channel as its own file.
+1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz and mixes two channels into one the way the API does, so the model hears the same audio apart from rounding. A file that this would not make smaller, such as 16-bit mono at 16 kHz, is sent as it is, and so is a file with more than two channels, because the API weighs those channels by the speaker positions its header declares.
+2. `"first_channel"` keeps only the first channel of a file with more than one. The channel is copied exactly in the file's own sample format when that is smaller than resampling it, as it always is at 16 kHz or below, and is otherwise resampled the same way. Use it to judge one speaker of a call who is on the first channel; for any other channel, send that channel as its own file.
 3. `None` sends the file as it is.
 
-MP3 files, WAV files that conversion would not make smaller, such as 16-bit mono at 16 kHz, and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are, and so is every file sent with `with_raw_response.create`.
+MP3 files and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are, and so is every file sent with `with_raw_response.create`.
 
 ## Quickstart
 

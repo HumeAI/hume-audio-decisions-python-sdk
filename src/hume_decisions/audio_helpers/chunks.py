@@ -105,9 +105,9 @@ def iter_audio_chunks(
 
     The model hears audio at 16 kHz in one channel: the API resamples and mixes down every file
     before the model hears it. A WAV file is mixed down the same way before it is cut, by default,
-    when that makes it smaller, so that the chunks are smaller to upload while the model hears the
-    same audio. `downmix_strategy`
-    describes how. MP3 files are cut as they are, because they are already compressed.
+    so that the chunks are smaller to upload while the model hears the same audio.
+    `downmix_strategy` describes how. MP3 files are cut as they are, because they are already
+    compressed.
 
     The whole recording is read into memory, mixed down and checked before this function returns,
     so that a file that cannot be split is rejected before any chunk is produced. Each chunk's
@@ -144,17 +144,19 @@ def iter_audio_chunks(
 
     downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
         How a WAV file is mixed down before it is cut. Audio above 16 kHz is resampled to 16 kHz with
-        the filter the API uses, and audio at 16 kHz or below keeps its rate. The result is one
-        channel of 32-bit floating point, the format the API converts every file to, so loud audio
-        cannot clip. A file that this would not make smaller, such as 16-bit mono at 16 kHz, is cut
-        as it is.
+        the filter the API uses, and audio at 16 kHz or below keeps its rate. Resampled audio is
+        written as 32-bit floating point, the format the API converts every file to, so loud audio
+        cannot clip.
 
         - "mix", the default, mixes two channels into one the way the API does, adding them at -3 dB
-          each, so the model hears the same audio as it would from the original file. Audio with
-          more than two channels is cut as it is, because the API weighs those channels by the
-          speaker positions its header declares.
-        - "first_channel" keeps only the first channel, so the model hears only that channel. Use
-          it when that channel holds the speaker to judge.
+          each, so the model hears the same audio as it would from the original file. A file that
+          this would not make smaller, such as 16-bit mono at 16 kHz, is cut as it is, and so is
+          audio with more than two channels, because the API weighs those channels by the speaker
+          positions its header declares.
+        - "first_channel" keeps only the first channel of a file with more than one, so the model
+          hears only that channel. The channel is copied exactly in the recording's sample format
+          when that is smaller than resampling it, as it always is at 16 kHz or below. Use it when
+          that channel holds the speaker to judge. Mono audio is treated as by "mix".
         - None cuts the audio as it is.
 
     Returns

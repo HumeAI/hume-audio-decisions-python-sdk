@@ -78,10 +78,10 @@ class DecisionsClient:
             See core.File for more documentation
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is sent, when that makes it smaller to upload. The API resamples
-            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
-            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
-            one, and None sends the file as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
+            How a WAV file is mixed down before it is sent, so that it is smaller to upload. The API resamples every
+            file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default, the
+            model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that one,
+            and None sends the file as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
             `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
@@ -192,11 +192,11 @@ class DecisionsClient:
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is cut, when that makes the chunks smaller to upload. The API
-            resamples every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix",
-            the default, the model hears the same audio. "first_channel" keeps only the first channel, so the model
-            hears only that one, and None sends the audio as it is. MP3 files are sent as they are.
-            `audio_helpers.iter_audio_chunks` describes each.
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
+            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
+            one, and None sends the audio as it is. MP3 files are sent as they are. `audio_helpers.iter_audio_chunks`
+            describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -295,11 +295,11 @@ class DecisionsClient:
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is cut, when that makes the chunks smaller to upload. The API
-            resamples every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix",
-            the default, the model hears the same audio. "first_channel" keeps only the first channel, so the model
-            hears only that one, and None sends the audio as it is. MP3 files are sent as they are.
-            `audio_helpers.iter_audio_chunks` describes each.
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
+            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
+            one, and None sends the audio as it is. MP3 files are sent as they are. `audio_helpers.iter_audio_chunks`
+            describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -417,10 +417,10 @@ class AsyncDecisionsClient:
             See core.File for more documentation
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is sent, when that makes it smaller to upload. The API resamples
-            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
-            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
-            one, and None sends the file as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
+            How a WAV file is mixed down before it is sent, so that it is smaller to upload. The API resamples every
+            file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default, the
+            model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that one,
+            and None sends the file as it is. MP3 files, and WAV files the SDK cannot read, are sent as they are.
             `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
@@ -539,11 +539,11 @@ class AsyncDecisionsClient:
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is cut, when that makes the chunks smaller to upload. The API
-            resamples every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix",
-            the default, the model hears the same audio. "first_channel" keeps only the first channel, so the model
-            hears only that one, and None sends the audio as it is. MP3 files are sent as they are.
-            `audio_helpers.iter_audio_chunks` describes each.
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
+            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
+            one, and None sends the audio as it is. MP3 files are sent as they are. `audio_helpers.iter_audio_chunks`
+            describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -650,11 +650,11 @@ class AsyncDecisionsClient:
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
-            How a WAV file is mixed down before it is cut, when that makes the chunks smaller to upload. The API
-            resamples every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix",
-            the default, the model hears the same audio. "first_channel" keeps only the first channel, so the model
-            hears only that one, and None sends the audio as it is. MP3 files are sent as they are.
-            `audio_helpers.iter_audio_chunks` describes each.
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the default,
+            the model hears the same audio. "first_channel" keeps only the first channel, so the model hears only that
+            one, and None sends the audio as it is. MP3 files are sent as they are. `audio_helpers.iter_audio_chunks`
+            describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.

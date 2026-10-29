@@ -85,12 +85,18 @@ def _noise(frames: int, channels: int) -> _Samples:
     return np.random.default_rng(frames).uniform(-0.5, 0.5, (frames, channels))
 
 
-@pytest.mark.parametrize("strategy", ["mix", "first_channel"])
 @pytest.mark.parametrize(
-    "sample_rate, channels, sample_width, is_float",
-    [(16000, 1, 2, False), (16000, 1, 4, True), (22050, 1, 2, False), (8000, 2, 1, False), (16000, 2, 2, False)],
+    "strategy, sample_rate, channels, sample_width, is_float",
+    [
+        ("mix", 16000, 1, 2, False),
+        ("first_channel", 16000, 1, 2, False),
+        ("mix", 16000, 1, 4, True),
+        ("first_channel", 22050, 1, 2, False),
+        ("mix", 8000, 2, 1, False),
+        ("mix", 16000, 2, 2, False),
+    ],
 )
-def test_audio_that_would_not_get_smaller_is_left_unchanged(
+def test_audio_the_api_mixes_the_same_way_is_left_unchanged_when_it_would_not_get_smaller(
     strategy: DownmixStrategy, sample_rate: int, channels: int, sample_width: int, is_float: bool
 ) -> None:
     file = _wav(_noise(1000, channels), sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
@@ -140,15 +146,29 @@ def test_mixing_two_channels_adds_them_at_minus_3_db_as_32_bit_float(sample_widt
 
 
 @pytest.mark.parametrize("sample_width, is_float", _FORMATS)
-def test_first_channel_keeps_every_sample_of_the_first_channel_as_32_bit_float(
-    sample_width: int, is_float: bool
+@pytest.mark.parametrize("sample_rate", [8000, 16000])
+def test_first_channel_at_16_khz_or_below_keeps_every_sample_of_the_first_channel(
+    sample_width: int, is_float: bool, sample_rate: int
 ) -> None:
-    file = _wav(_noise(1000, 6), sample_rate=16000, sample_width=sample_width, is_float=is_float)
+    file = _wav(_noise(1000, 2), sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
 
     audio = _read(typing.cast(bytes, _downmix(file, "first_channel")))
 
-    assert (audio.sample_rate, audio.sample_width, audio.is_float) == (16000, 4, True)
-    assert np.array_equal(audio.samples, _read(file).samples[:, :1].astype(np.float32))
+    expected = _read(file).samples[:, :1]
+    # 64-bit floating point is halved by writing it as 32-bit, the format the API converts it to.
+    if sample_width == 8:
+        expected = expected.astype(np.float32)
+    assert (audio.sample_rate, audio.sample_width, audio.is_float) == (sample_rate, min(sample_width, 4), is_float)
+    assert np.array_equal(audio.samples, expected)
+
+
+def test_first_channel_copies_the_first_channel_above_16_khz_when_that_is_smaller_than_resampling() -> None:
+    file = _wav(_noise(1000, 2), sample_rate=22050, sample_width=1)
+
+    audio = _read(typing.cast(bytes, _downmix(file, "first_channel")))
+
+    assert (audio.sample_rate, audio.sample_width) == (22050, 1)
+    assert np.array_equal(audio.samples, _read(file).samples[:, :1])
 
 
 @pytest.mark.skipif(_FFMPEG is None, reason="ffmpeg is not installed")
@@ -161,6 +181,9 @@ def test_first_channel_keeps_every_sample_of_the_first_channel_as_32_bit_float(
         (44100, 1, "mix", False),
         (8000, 2, "mix", False),
         (48000, 2, "first_channel", False),
+        (8000, 2, "first_channel", False),
+        (16000, 2, "first_channel", False),
+        (22050, 2, "first_channel", False),
         (22050, 6, "mix", False),
         (48000, 1, "mix", True),
         (48000, 2, "mix", True),
