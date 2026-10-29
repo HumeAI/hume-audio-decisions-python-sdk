@@ -89,7 +89,7 @@ def is_mp3(data: memoryview) -> bool:
 
 
 def parse_mp3(data: memoryview) -> Mp3Audio:
-    offset = _skip_id3v2(data, 0)
+    offset = _skip_id3v2(data)
     first = _read_header(data, offset)
     # The first frame can be a Xing, Info or VBRI header, which holds the length of the whole file
     # instead of audio. Left in a chunk, it would tell players the chunk is that long.
@@ -148,7 +148,8 @@ def _reservoir_bytes(data: memoryview, offset: int, header: _Header) -> int:
     return data[side_info]
 
 
-def _skip_id3v2(data: memoryview, offset: int) -> int:
+def _skip_id3v2(data: memoryview) -> int:
+    offset = 0
     while bytes(data[offset : offset + 3]) == b"ID3" and offset + 10 <= len(data):
         flags = data[offset + 5]
         # ID3v2 sizes store 7 bits in each byte.

@@ -95,13 +95,12 @@ class ChunkedDecisionsResult:
         it that failed because their audio could not be decoded are not sent again. None when no chunk
         stopped the job.
         """
-        any_succeeded = False
+        rule = _StopRule()
         for position, chunk in enumerate(self.chunks):
-            if chunk.error is not None and not _fails_only_this_chunk(chunk.error, any_succeeded):
+            if rule.stops(chunk):
                 # An MP3 chunk's start_ms includes frames repeated from before it, so resuming there
                 # would send those again as new audio.
                 return self.chunks[position - 1].end_ms if position > 0 else self.start_ms
-            any_succeeded = any_succeeded or chunk.response is not None
         return None
 
 
@@ -123,7 +122,7 @@ def iter_send_chunks(
 def _send(
     create: typing.Callable[[File], DecisionsResponse], file: File, chunks: typing.Iterable[PlannedChunk]
 ) -> typing.Iterator[ChunkResult]:
-    any_succeeded = False
+    rule = _StopRule()
     stopped = False
     # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for chunk in chunks:
@@ -134,9 +133,9 @@ def _send(
                 response = create(_with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised, any_succeeded)
-        any_succeeded = any_succeeded or response is not None
-        yield ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        stopped = stopped or rule.stops(result)
+        yield result
 
 
 async def iter_send_chunks_async(
@@ -153,7 +152,7 @@ async def iter_send_chunks_async(
     chunks = await asyncio.to_thread(
         plan_audio_chunks, file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms, split=split
     )
-    any_succeeded = False
+    rule = _StopRule()
     stopped = False
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
@@ -163,9 +162,21 @@ async def iter_send_chunks_async(
                 response = await create(_with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised, any_succeeded)
-        any_succeeded = any_succeeded or response is not None
-        yield ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        stopped = stopped or rule.stops(result)
+        yield result
+
+
+class _StopRule:
+    # Sending chunks and finding resume_ms in a finished result must agree on which chunk stopped the
+    # job, so both feed the chunks through this in order.
+    def __init__(self) -> None:
+        self._any_succeeded = False
+
+    def stops(self, chunk: ChunkResult) -> bool:
+        stopped = chunk.error is not None and not _fails_only_this_chunk(chunk.error, self._any_succeeded)
+        self._any_succeeded = self._any_succeeded or chunk.response is not None
+        return stopped
 
 
 def _fails_only_this_chunk(error: Exception, after_success: bool) -> bool:
@@ -181,7 +192,6 @@ def _fails_only_this_chunk(error: Exception, after_success: bool) -> bool:
 
 
 def _with_content(file: File, data: bytes) -> File:
-    # Each chunk is uploaded with the filename, content type and headers the caller gave the file.
     if not isinstance(file, tuple):
         return data
     return (file[0], data, *file[2:])

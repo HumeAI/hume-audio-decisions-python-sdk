@@ -166,9 +166,9 @@ def plan_audio_chunks(
     file: File,
     *,
     max_chunk_ms: int,
-    start_ms: typing.Optional[int] = None,
-    end_ms: typing.Optional[int] = None,
-    split: ChunkSplit = "even",
+    start_ms: typing.Optional[int],
+    end_ms: typing.Optional[int],
+    split: ChunkSplit,
 ) -> typing.Iterator[PlannedChunk]:
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
     if split not in ("even", "fixed"):
@@ -232,10 +232,11 @@ def _wav_chunks(
         last = wav.sample_count
     else:
         last = min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
+    first = _to_sample(start_ms, wav.sample_rate)
     if split == "even":
-        cuts = _even_wav_cuts(wav, max_chunk_ms, _to_sample(start_ms, wav.sample_rate), last)
+        cuts = _even_wav_cuts(wav, max_chunk_ms, first, last)
     else:
-        _check_wav_size(wav, max_chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
+        _check_wav_size(wav, max_chunk_ms, last - first)
         cuts = _fixed_wav_cuts(wav, max_chunk_ms, start_ms, last)
     return _plan(
         cuts,

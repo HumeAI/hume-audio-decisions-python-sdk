@@ -23,6 +23,8 @@ from hume_decisions import (
 from hume_decisions.audio_helpers import ChunkedDecisionsResult, ChunkResult, chunks, iter_audio_chunks
 from hume_decisions.core import ApiError
 
+_ASSETS = pathlib.Path(__file__).parent / "assets"
+
 _REQUEST = DecisionsRequest(
     context="A test call.",
     questions={"talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?")},
@@ -389,7 +391,7 @@ def test_resuming_an_mp3_job_at_resume_ms_sends_the_same_chunks_as_the_job_that_
 ) -> None:
     # Each chunk of this file starts with frames repeated from the chunk before it, so resuming where
     # the stopped chunk starts would send those frames again in a chunk of its own.
-    audio = (pathlib.Path(__file__).parent / "assets" / "tone_mpeg25_8k.mp3").read_bytes()
+    audio = (_ASSETS / "tone_mpeg25_8k.mp3").read_bytes()
     stopped = create_chunked(
         [],
         lambda number: _failed(402, "payment_required") if number == 3 else _succeeded(number),
@@ -442,7 +444,7 @@ def test_resume_ms_is_the_job_start_when_an_mp3_job_stops_at_its_first_chunk(
 ) -> None:
     # The first chunk starts with frames from before the job's start, and before 0 when the encoder
     # added samples before the recording, so its start_ms is earlier than where the job started.
-    audio = (pathlib.Path(__file__).parent / "assets" / "tone_mpeg25_8k.mp3").read_bytes()
+    audio = (_ASSETS / "tone_mpeg25_8k.mp3").read_bytes()
     stopped = create_chunked(
         [], lambda number: _failed(402, "payment_required"), file=audio, max_chunk_ms=1000, start_ms=start_ms
     )
