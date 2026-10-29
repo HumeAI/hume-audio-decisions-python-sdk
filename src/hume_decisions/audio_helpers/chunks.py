@@ -13,9 +13,9 @@ from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 # The Decisions API accepts audio up to 5 minutes long.
 MAX_CHUNK_MS = 300_000
 
-# The API accepts a request body of up to 64,000,000 bytes, its JSON part and multipart headers
+# The API accepts a request body of up to 25,000,000 bytes, its JSON part and multipart headers
 # included. The rest is left for those, so a chunk this size is accepted with any common request.
-MAX_CHUNK_BYTES = 63_000_000
+MAX_CHUNK_BYTES = 24_000_000
 
 ChunkSplit = typing.Literal["even", "fixed"]
 
@@ -115,8 +115,9 @@ def iter_audio_chunks(
 
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
-        most 63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files
-        of up to about 210 kB per second, such as 48 kHz 16-bit stereo.
+        most 24,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files
+        of up to 80 kB per second, such as 16 kHz 16-bit stereo. 16-bit stereo needs chunks of at
+        most 136054 ms at 44.1 kHz and 124999 ms at 48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.

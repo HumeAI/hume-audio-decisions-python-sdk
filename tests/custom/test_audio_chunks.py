@@ -238,22 +238,22 @@ def test_chunk_duration_out_of_range_is_rejected(max_chunk_ms: int) -> None:
 
 
 def test_chunk_too_large_for_the_api_is_rejected_with_the_longest_chunk_that_fits() -> None:
-    # 32-bit float stereo at 48 kHz is 384,000 bytes a second, so 170 seconds is 65,280,000 bytes.
-    recording = _raw_wav(tag=0x0003, sample_rate=48000, channels=2, bits=32, data=bytes(170 * 384_000))
+    # 32-bit float stereo at 48 kHz is 384,000 bytes a second, so 70 seconds is 26,880,000 bytes.
+    recording = _raw_wav(tag=0x0003, sample_rate=48000, channels=2, bits=32, data=bytes(70 * 384_000))
 
-    with pytest.raises(ValueError, match="max_chunk_ms must be at most 164062 for this WAV file"):
+    with pytest.raises(ValueError, match="max_chunk_ms must be at most 62499 for this WAV file"):
         iter_audio_chunks(recording, max_chunk_ms=300_000)
-    chunk = next(iter_audio_chunks(recording, max_chunk_ms=164062))
+    chunk = next(iter_audio_chunks(recording, max_chunk_ms=62499))
 
-    assert len(chunk.data) <= 63_000_000
+    assert len(chunk.data) <= 24_000_000
 
 
 def test_chunk_duration_longer_than_the_api_accepts_is_allowed_when_the_range_is_shorter() -> None:
-    recording = _raw_wav(tag=0x0003, sample_rate=48000, channels=2, bits=32, data=bytes(170 * 384_000))
+    recording = _raw_wav(tag=0x0003, sample_rate=48000, channels=2, bits=32, data=bytes(70 * 384_000))
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=300_000, start_ms=10_000))
 
-    assert [(c.start_ms, c.end_ms) for c in chunks] == [(10_000, 170_000)]
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(10_000, 70_000)]
 
 
 def test_chunk_duration_that_is_not_an_integer_is_rejected() -> None:
