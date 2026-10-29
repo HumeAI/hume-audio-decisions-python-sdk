@@ -161,7 +161,7 @@ asyncio.run(main())
 
 ## Long recordings
 
-`decisions.create_chunked` splits a recording longer than 5 minutes into chunks and sends each chunk as a separate `create` request, so each chunk has its own `run_id` and is billed on its own. The answers are not combined across chunks: you get one response per chunk.
+`decisions.create_chunked` never sends the recording to the model as one file. It cuts the recording into chunks of `chunk_ms` and sends each chunk to the API in its own `create` request. The model processes each chunk independently: it hears only that chunk, knows nothing of the chunks before or after it, and answers every question about that chunk alone. Each chunk gets its own response with its own `run_id` and is billed on its own. Nothing combines the answers across chunks, so you get one response per chunk.
 
 `chunk_ms` sets the length of each chunk and has no default, because it decides how many requests the job sends. A WAV recording is sent as its duration divided by `chunk_ms` requests, rounded up: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. An MP3 recording can take more requests, because each chunk holds only whole frames and starts with frames repeated from the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated frames, so they can add several. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
 
@@ -169,7 +169,7 @@ asyncio.run(main())
 2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers one minute.
 
 ```python
-from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment
+from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
 
 client = DecisionsClient()
 
@@ -177,7 +177,11 @@ with open("long_call.wav", "rb") as audio:
     result = client.decisions.create_chunked(
         file=("long_call.wav", audio, "audio/wav"),
         request=DecisionsRequest(
-            questions={"agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?")},
+            context="A call in which a voice AI agent helps a caller reschedule an appointment.",
+            questions={
+                "agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?"),
+                "talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?"),
+            },
         ),
         chunk_ms=300_000,
     )
@@ -194,6 +198,24 @@ for chunk in result.chunks:
 ```
 
 Every request asks the same questions with the same context, and `request_options` applies to each one. `start_ms` and `end_ms` limit the job to part of the recording. Each chunk's `start_ms` and `end_ms` give where it actually starts and ends in the recording, so add the chunk's `start_ms` to a moment's times to place the moment in the recording.
+
+Because the model answers about each chunk as if it were the whole recording, write the context and questions to hold for any part of the call:
+
+1. Describe in the context what is true throughout the call, such as who is speaking and what the call is for. A detail about one part of the call, such as "the agent speaks first", is true of the first chunk only, and in every other chunk it describes audio the model cannot hear.
+2. Ask about what can be heard within a single chunk. "Does the agent talk over the caller?" can be answered from any stretch of the call. "Is the caller's appointment rescheduled by the end of the call?" cannot, because the end of the call is in only one chunk.
+
+Each answer describes only its own chunk, and the answers are not combined for you, because the right way to combine them depends on the question. To ask whether something happens anywhere in the call, for example, take the highest `noul` across the chunks:
+
+```python
+from hume_decisions import Answer_Noul
+
+if result.complete:
+    answers = [response.answers["talks_over_caller"] for response in result.responses if response is not None]
+    highest = max(answer.noul for answer in answers if isinstance(answer, Answer_Noul))
+    print(f"In the chunk most likely to show it, {highest:.0%} of raters would say the agent talks over the caller.")
+```
+
+To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once each moment's times have its chunk's `start_ms` added, but an MP3 chunk repeats a little audio from the end of the chunk before, so a moment just after a cut can also appear at the end of the previous chunk.
 
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 

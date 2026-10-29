@@ -141,7 +141,7 @@ class DecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
-        Splits a recording longer than `create` accepts into chunks and sends each chunk as a separate `create` request, with its own `run_id` and its own billing. The answers are not combined across chunks.
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing.
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
@@ -349,7 +349,7 @@ class AsyncDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
-        Splits a recording longer than `create` accepts into chunks and sends each chunk as a separate `create` request, with its own `run_id` and its own billing. The answers are not combined across chunks.
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing.
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
