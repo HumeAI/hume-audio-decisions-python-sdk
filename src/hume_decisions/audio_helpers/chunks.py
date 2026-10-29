@@ -155,8 +155,9 @@ def iter_audio_chunks(
           positions its header declares.
         - "first_channel" keeps only the first channel of a file with more than one, so the model
           hears only that channel. The channel is copied exactly in the recording's sample format
-          when that is smaller than resampling it, as it always is at 16 kHz or below. Use it when
-          that channel holds the speaker to judge. Mono audio is treated as by "mix".
+          when that is no larger than resampling it, as it is at 16 kHz or below for every sample
+          format but 64-bit floating point. Use it when that channel holds the speaker to judge.
+          Mono audio is treated as by "mix".
         - None cuts the audio as it is.
 
     Returns
