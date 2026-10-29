@@ -153,19 +153,18 @@ def plan_audio_chunks(
     chunk_ms = _check_integer("chunk_ms", chunk_ms)
     if not 1 <= chunk_ms <= MAX_CHUNK_MS:
         raise ValueError(f"chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {chunk_ms}.")
-    if start_ms is not None:
-        start_ms = _check_integer("start_ms", start_ms)
-        if start_ms < 0:
-            raise ValueError(f"start_ms must not be negative, got {start_ms}.")
+    start = 0 if start_ms is None else _check_integer("start_ms", start_ms)
+    if start < 0:
+        raise ValueError(f"start_ms must not be negative, got {start}.")
     if end_ms is not None:
         end_ms = _check_integer("end_ms", end_ms)
-        if end_ms <= (start_ms or 0):
+        if end_ms <= start:
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
     data, given_as_str = _read(file)
     if is_wav(data):
-        return _wav_chunks(data, parse_wav(data), chunk_ms, start_ms, end_ms)
+        return _wav_chunks(data, parse_wav(data), chunk_ms, start, end_ms)
     if is_mp3(data):
-        return _mp3_chunks(data, parse_mp3(data), chunk_ms, start_ms, end_ms)
+        return _mp3_chunks(data, parse_mp3(data), chunk_ms, start, end_ms)
     message = "Unsupported audio format. Only MP3 and WAV files can be split into chunks."
     if given_as_str:
         message += (
@@ -189,19 +188,19 @@ def _read(file: File) -> typing.Tuple[memoryview, bool]:
     return memoryview(content), False
 
 
-def _check_range(count: int, duration_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]) -> None:
+def _check_range(count: int, duration_ms: int, start_ms: int, end_ms: typing.Optional[int]) -> None:
     if count == 0:
         raise ValueError("The audio is empty.")
     # The longest range allowed ends at the duration that the final chunk reports.
     # A recording shorter than half a millisecond has a duration of 0 ms but still starts at 0.
-    if start_ms and start_ms >= duration_ms:
+    if start_ms > 0 and start_ms >= duration_ms:
         raise ValueError(f"start_ms must be less than the recording's duration of {duration_ms} ms, got {start_ms}.")
     if end_ms is not None and end_ms > duration_ms:
         raise ValueError(f"end_ms must not exceed the recording's duration of {duration_ms} ms, got {end_ms}.")
 
 
 def _wav_chunks(
-    data: memoryview, wav: WavAudio, chunk_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]
+    data: memoryview, wav: WavAudio, chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
 ) -> typing.Iterator[PlannedChunk]:
     duration_ms = _to_ms(wav.sample_count, wav.sample_rate)
     _check_range(wav.sample_count, duration_ms, start_ms, end_ms)
@@ -210,8 +209,8 @@ def _wav_chunks(
         last = wav.sample_count
     else:
         last = min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
-    _check_wav_size(wav, chunk_ms, last - _to_sample(start_ms or 0, wav.sample_rate))
-    return _iter_wav_chunks(data, wav, chunk_ms, start_ms or 0, last)
+    _check_wav_size(wav, chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
+    return _iter_wav_chunks(data, wav, chunk_ms, start_ms, last)
 
 
 def _check_wav_size(wav: WavAudio, chunk_ms: int, range_samples: int) -> None:
@@ -229,10 +228,10 @@ def _check_wav_size(wav: WavAudio, chunk_ms: int, range_samples: int) -> None:
 
 
 def _mp3_chunks(
-    data: memoryview, mp3: Mp3Audio, chunk_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]
+    data: memoryview, mp3: Mp3Audio, chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
 ) -> typing.Iterator[PlannedChunk]:
     frame_samples = mp3.samples_per_frame
-    duration_ms = _to_ms(_mp3_end_sample(mp3) - mp3.leading_samples, mp3.sample_rate)
+    duration_ms = _to_ms(mp3.end_sample - mp3.leading_samples, mp3.sample_rate)
     _check_range(mp3.frame_count, duration_ms, start_ms, end_ms)
     # Rounding down keeps every chunk within chunk_ms, so a chunk_ms of 300000 stays within the
     # API's limit.
@@ -243,7 +242,7 @@ def _mp3_chunks(
     # Times given by the caller are often ones a chunk reported, which are rounded to the
     # millisecond, so they move to the nearest frame boundary rather than the one before. The start
     # and end of the recording can fall partway through a frame, so they keep that whole frame.
-    first = 0 if not start_ms else _frame_at(mp3, start_ms)
+    first = 0 if start_ms == 0 else _frame_at(mp3, start_ms)
     last = mp3.frame_count if end_ms is None or end_ms >= duration_ms else min(_frame_at(mp3, end_ms), mp3.frame_count)
     if last <= first:
         raise ValueError(
@@ -258,10 +257,6 @@ def _mp3_chunks(
             " at least one new frame."
         )
     return _iter_mp3_chunks(data, mp3, frames_per_chunk, first, last)
-
-
-def _mp3_end_sample(mp3: Mp3Audio) -> int:
-    return mp3.frame_count * mp3.samples_per_frame - mp3.trailing_samples
 
 
 def _frame_at(mp3: Mp3Audio, ms: int) -> int:
@@ -287,9 +282,7 @@ def _iter_mp3_chunks(
         yield PlannedChunk(
             index=index,
             start_ms=_to_ms(start * mp3.samples_per_frame - mp3.leading_samples, mp3.sample_rate),
-            end_ms=_to_ms(
-                min(end * mp3.samples_per_frame, _mp3_end_sample(mp3)) - mp3.leading_samples, mp3.sample_rate
-            ),
+            end_ms=_to_ms(min(end * mp3.samples_per_frame, mp3.end_sample) - mp3.leading_samples, mp3.sample_rate),
             build=functools.partial(mp3_chunk, data, mp3, start, end),
         )
         index += 1

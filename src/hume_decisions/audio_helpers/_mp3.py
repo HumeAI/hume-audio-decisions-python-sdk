@@ -1,5 +1,6 @@
 # Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import dataclasses
 import typing
 
 _CONVERT_COMMAND = "ffmpeg -i input.mp3 -c:a libmp3lame -q:a 2 output.mp3"
@@ -32,15 +33,22 @@ class _Header(typing.NamedTuple):
     side_info_size: int
 
 
-class Mp3Audio(typing.NamedTuple):
+class _HeaderFrame(typing.NamedTuple):
+    leading_samples: int
+    trailing_samples: int
+    stated_frames: typing.Optional[int]
+
+
+@dataclasses.dataclass(frozen=True)
+class Mp3Audio:
     sample_rate: int
     samples_per_frame: int
     # Where each frame starts, followed by where the last one ends. Frames are contiguous.
-    offsets: typing.List[int]
+    offsets: typing.Tuple[int, ...]
     # For each frame, how many bytes of its audio data are stored in the frames before it, and how
     # many bytes of audio data, its own or later frames', it holds itself.
-    reservoir_bytes: typing.List[int]
-    main_data_bytes: typing.List[int]
+    reservoir_bytes: typing.Tuple[int, ...]
+    main_data_bytes: typing.Tuple[int, ...]
     # Samples decoded from the frames before the recording starts and after it ends, which players
     # leave out when a LAME tag states them. Both are 0 without one.
     leading_samples: int
@@ -49,6 +57,11 @@ class Mp3Audio(typing.NamedTuple):
     @property
     def frame_count(self) -> int:
         return len(self.offsets) - 1
+
+    @property
+    def end_sample(self) -> int:
+        """The sample after the recording's last, counted from the start of the first frame."""
+        return self.frame_count * self.samples_per_frame - self.trailing_samples
 
     def frames_needed_before(self, frame: int) -> int:
         """Counts the frames that must come before `frame` in a chunk for it to decode exactly."""
@@ -78,16 +91,14 @@ def is_mp3(data: memoryview) -> bool:
 def parse_mp3(data: memoryview) -> Mp3Audio:
     offset = _skip_id3v2(data, 0)
     first = _read_header(data, offset)
-    whole = offset + first.length <= len(data)
     # The first frame can be a Xing, Info or VBRI header, which holds the length of the whole file
     # instead of audio. Left in a chunk, it would tell players the chunk is that long.
-    vbr_header = whole and _is_vbr_header(data, offset, first)
-    leading, trailing, stated_frames = _read_lame_tag(data, offset, first) if vbr_header else (0, 0, None)
-    audio = Mp3Audio(first.sample_rate, 1152 if first.version == _MPEG1 else 576, [], [], [], leading, trailing)
-    if whole:
-        if not vbr_header:
-            _add_frame(data, offset, first, audio)
+    header_frame = _read_header_frame(data, offset, first) if offset + first.length <= len(data) else None
+    if header_frame is not None:
         offset += first.length
+    offsets: typing.List[int] = []
+    reservoir_bytes: typing.List[int] = []
+    main_data_bytes: typing.List[int] = []
     while offset + 4 <= len(data) and not any(bytes(data[offset : offset + len(tag)]) == tag for tag in _TRAILING_TAGS):
         header = _read_header(data, offset)
         if header.version != first.version or header.sample_rate != first.sample_rate:
@@ -95,14 +106,25 @@ def parse_mp3(data: memoryview) -> Mp3Audio:
         # A file cut short is read up to its last whole frame.
         if offset + header.length > len(data):
             break
-        _add_frame(data, offset, header, audio)
+        offsets.append(offset)
+        reservoir_bytes.append(_reservoir_bytes(data, offset, header))
+        main_data_bytes.append(header.length - header.side_info_start - header.side_info_size)
         offset += header.length
-    audio.offsets.append(offset)
+    offsets.append(offset)
+    leading, trailing, stated_frames = header_frame or _HeaderFrame(0, 0, None)
     # The samples added at the end close the frames the header counts. A file cut short has lost
     # them, and players then leave nothing out at the end.
-    if stated_frames != audio.frame_count:
-        return audio._replace(trailing_samples=0)
-    return audio
+    if stated_frames != len(offsets) - 1:
+        trailing = 0
+    return Mp3Audio(
+        sample_rate=first.sample_rate,
+        samples_per_frame=1152 if first.version == _MPEG1 else 576,
+        offsets=tuple(offsets),
+        reservoir_bytes=tuple(reservoir_bytes),
+        main_data_bytes=tuple(main_data_bytes),
+        leading_samples=leading,
+        trailing_samples=trailing,
+    )
 
 
 def mp3_chunk(data: memoryview, audio: Mp3Audio, start: int, end: int) -> bytes:
@@ -110,17 +132,13 @@ def mp3_chunk(data: memoryview, audio: Mp3Audio, start: int, end: int) -> bytes:
     return bytes(data[audio.offsets[start] : audio.offsets[end]])
 
 
-def _add_frame(data: memoryview, offset: int, header: _Header, audio: Mp3Audio) -> None:
+def _reservoir_bytes(data: memoryview, offset: int, header: _Header) -> int:
     # Layer III frames may store audio data in the unused space of the frames before them. The side
     # information starts with how far back that data begins: 9 bits in MPEG-1 and 8 bits otherwise.
     side_info = offset + header.side_info_start
     if header.version == _MPEG1:
-        reservoir = data[side_info] << 1 | data[side_info + 1] >> 7
-    else:
-        reservoir = data[side_info]
-    audio.offsets.append(offset)
-    audio.reservoir_bytes.append(reservoir)
-    audio.main_data_bytes.append(max(0, header.length - header.side_info_start - header.side_info_size))
+        return data[side_info] << 1 | data[side_info + 1] >> 7
+    return data[side_info]
 
 
 def _skip_id3v2(data: memoryview, offset: int) -> int:
@@ -162,17 +180,15 @@ def _read_header(data: memoryview, offset: int) -> _Header:
     return _Header(version, sample_rate, length, side_info_start, side_info_size)
 
 
-def _is_vbr_header(data: memoryview, offset: int, header: _Header) -> bool:
+def _read_header_frame(data: memoryview, offset: int, header: _Header) -> typing.Optional[_HeaderFrame]:
+    """
+    Reads a Xing, Info or VBRI header frame: the samples added before and after the recording, and
+    the frame count it states. None when the frame holds audio instead.
+    """
     # Encoders place the Xing tag after the side information as if the frame had no checksum.
     xing = offset + 4 + header.side_info_size
-    return bytes(data[xing : xing + 4]) in (b"Xing", b"Info") or bytes(data[offset + 36 : offset + 40]) == b"VBRI"
-
-
-def _read_lame_tag(data: memoryview, offset: int, header: _Header) -> typing.Tuple[int, int, typing.Optional[int]]:
-    """Reads the samples added before and after the recording, and the frame count the header states."""
-    xing = offset + 4 + header.side_info_size
     if bytes(data[xing : xing + 4]) not in (b"Xing", b"Info"):
-        return 0, 0, None
+        return _HeaderFrame(0, 0, None) if bytes(data[offset + 36 : offset + 40]) == b"VBRI" else None
     flags = int.from_bytes(data[xing + 4 : xing + 8], "big")
     position = xing + 8
     stated_frames = None
@@ -182,13 +198,13 @@ def _read_lame_tag(data: memoryview, offset: int, header: _Header) -> typing.Tup
     # The byte count, table of contents and quality follow when their flags are set.
     position += (4 if flags & 2 else 0) + (100 if flags & 4 else 0) + (4 if flags & 8 else 0)
     if position + 24 > offset + header.length or bytes(data[position : position + 4]) not in _LAME_TAG_ENCODERS:
-        return 0, 0, stated_frames
+        return _HeaderFrame(0, 0, stated_frames)
     # Two 12-bit counts after the encoder's name and other settings: the samples the encoder added
     # before the recording, and after it. The decoder's own delay precedes both.
     b0, b1, b2 = data[position + 21 : position + 24]
     delay = b0 << 4 | b1 >> 4
     padding = (b1 & 0x0F) << 8 | b2
-    return delay + _DECODER_DELAY, max(0, padding - _DECODER_DELAY), stated_frames
+    return _HeaderFrame(delay + _DECODER_DELAY, max(0, padding - _DECODER_DELAY), stated_frames)
 
 
 def _unsupported(reason: str) -> ValueError:
