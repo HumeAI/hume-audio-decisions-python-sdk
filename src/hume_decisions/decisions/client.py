@@ -135,7 +135,7 @@ class DecisionsClient:
         *,
         request: DecisionsRequest,
         file: core.File,
-        chunk_ms: int,
+        max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
@@ -157,9 +157,9 @@ class DecisionsClient:
         file : core.File
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
-        chunk_ms : int
-            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
-            the limit on the size of a WAV chunk.
+        max_chunk_ms : int
+            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
+            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -197,7 +197,7 @@ class DecisionsClient:
                     },
                 ),
                 file=f,
-                chunk_ms=300_000,
+                max_chunk_ms=300_000,
             ):
                 if chunk.response is not None:
                     print(chunk.start_ms, chunk.response.run_id)
@@ -207,7 +207,7 @@ class DecisionsClient:
         return iter_send_chunks(
             lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
             file,
-            chunk_ms=chunk_ms,
+            max_chunk_ms=max_chunk_ms,
             start_ms=start_ms,
             end_ms=end_ms,
         )
@@ -217,7 +217,7 @@ class DecisionsClient:
         *,
         request: DecisionsRequest,
         file: core.File,
-        chunk_ms: int,
+        max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
@@ -241,9 +241,9 @@ class DecisionsClient:
         file : core.File
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
-        chunk_ms : int
-            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
-            the limit on the size of a WAV chunk.
+        max_chunk_ms : int
+            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
+            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -281,7 +281,7 @@ class DecisionsClient:
                     },
                 ),
                 file=f,
-                chunk_ms=300_000,
+                max_chunk_ms=300_000,
             )
         for chunk in result.chunks:
             if chunk.response is not None:
@@ -294,7 +294,7 @@ class DecisionsClient:
                 self.iter_create_chunked(
                     request=request,
                     file=file,
-                    chunk_ms=chunk_ms,
+                    max_chunk_ms=max_chunk_ms,
                     start_ms=start_ms,
                     end_ms=end_ms,
                     request_options=request_options,
@@ -432,7 +432,7 @@ class AsyncDecisionsClient:
         *,
         request: DecisionsRequest,
         file: core.File,
-        chunk_ms: int,
+        max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
@@ -454,9 +454,9 @@ class AsyncDecisionsClient:
         file : core.File
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
-        chunk_ms : int
-            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
-            the limit on the size of a WAV chunk.
+        max_chunk_ms : int
+            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
+            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -499,7 +499,7 @@ class AsyncDecisionsClient:
                         },
                     ),
                     file=f,
-                    chunk_ms=300_000,
+                    max_chunk_ms=300_000,
                 ):
                     if chunk.response is not None:
                         print(chunk.start_ms, chunk.response.run_id)
@@ -512,7 +512,7 @@ class AsyncDecisionsClient:
         return iter_send_chunks_async(
             lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
             file,
-            chunk_ms=chunk_ms,
+            max_chunk_ms=max_chunk_ms,
             start_ms=start_ms,
             end_ms=end_ms,
         )
@@ -522,7 +522,7 @@ class AsyncDecisionsClient:
         *,
         request: DecisionsRequest,
         file: core.File,
-        chunk_ms: int,
+        max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
@@ -546,9 +546,9 @@ class AsyncDecisionsClient:
         file : core.File
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
-        chunk_ms : int
-            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
-            the limit on the size of a WAV chunk.
+        max_chunk_ms : int
+            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
+            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -591,7 +591,7 @@ class AsyncDecisionsClient:
                         },
                     ),
                     file=f,
-                    chunk_ms=300_000,
+                    max_chunk_ms=300_000,
                 )
             for chunk in result.chunks:
                 if chunk.response is not None:
@@ -609,7 +609,7 @@ class AsyncDecisionsClient:
                     async for chunk in self.iter_create_chunked(
                         request=request,
                         file=file,
-                        chunk_ms=chunk_ms,
+                        max_chunk_ms=max_chunk_ms,
                         start_ms=start_ms,
                         end_ms=end_ms,
                         request_options=request_options,

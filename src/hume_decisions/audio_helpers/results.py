@@ -95,13 +95,13 @@ def iter_send_chunks(
     create: typing.Callable[[File], DecisionsResponse],
     file: File,
     *,
-    chunk_ms: int,
+    max_chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
 ) -> typing.Iterator[ChunkResult]:
     # Planning reads and checks the whole file, so a file that cannot be split raises here, when the
     # caller asks for the iterator, rather than when iteration starts.
-    chunks = plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    chunks = plan_audio_chunks(file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms)
     return _send(create, file, chunks)
 
 
@@ -130,13 +130,15 @@ async def iter_send_chunks_async(
     create: typing.Callable[[File], typing.Awaitable[DecisionsResponse]],
     file: File,
     *,
-    chunk_ms: int,
+    max_chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
 ) -> typing.AsyncIterator[ChunkResult]:
     # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
     # thread to keep the event loop free.
-    chunks = await asyncio.to_thread(plan_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    chunks = await asyncio.to_thread(
+        plan_audio_chunks, file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms
+    )
     results: typing.List[ChunkResult] = []
     stopped = False
     for chunk in chunks:

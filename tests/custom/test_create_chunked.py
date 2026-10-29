@@ -123,9 +123,9 @@ def test_sends_each_chunk_in_order_and_returns_each_response(create_chunked: _Cr
     requests: typing.List[httpx.Request] = []
     audio = _wav(2500)
 
-    result = create_chunked(requests, file=audio, chunk_ms=1000)
+    result = create_chunked(requests, file=audio, max_chunk_ms=1000)
 
-    expected = list(iter_audio_chunks(audio, chunk_ms=1000))
+    expected = list(iter_audio_chunks(audio, max_chunk_ms=1000))
     assert [_parts(request)["file"].get_payload(decode=True) for request in requests] == [c.data for c in expected]
     for request in requests:
         assert json.loads(typing.cast(bytes, _parts(request)["request"].get_payload(decode=True))) == {
@@ -134,7 +134,7 @@ def test_sends_each_chunk_in_order_and_returns_each_response(create_chunked: _Cr
                 "talks_over_caller": {"type": "noul", "instructions": "Does the agent talk over the caller?"}
             },
         }
-    assert [(c.index, c.start_ms, c.end_ms) for c in result.chunks] == [(0, 0, 1000), (1, 1000, 2000), (2, 2000, 2500)]
+    assert [(c.index, c.start_ms, c.end_ms) for c in result.chunks] == [(0, 0, 833), (1, 833, 1667), (2, 1667, 2500)]
     assert [response.run_id for response in result.responses if response is not None] == ["run-1", "run-2", "run-3"]
     assert [c.status for c in result.chunks] == ["succeeded"] * 3
     assert [c.error for c in result.chunks] == [None] * 3
@@ -144,16 +144,16 @@ def test_sends_each_chunk_in_order_and_returns_each_response(create_chunked: _Cr
 def test_sends_only_the_requested_range(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
 
-    result = create_chunked(requests, file=_wav(5000), chunk_ms=1000, start_ms=1500, end_ms=3000)
+    result = create_chunked(requests, file=_wav(5000), max_chunk_ms=1000, start_ms=1500, end_ms=3000)
 
     assert len(requests) == 2
-    assert [(c.start_ms, c.end_ms) for c in result.chunks] == [(1500, 2500), (2500, 3000)]
+    assert [(c.start_ms, c.end_ms) for c in result.chunks] == [(1500, 2250), (2250, 3000)]
 
 
 def test_uploads_each_chunk_with_the_filename_and_content_type_given(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
 
-    create_chunked(requests, file=("call.wav", io.BytesIO(_wav(2000)), "audio/wav"), chunk_ms=1000)
+    create_chunked(requests, file=("call.wav", io.BytesIO(_wav(2000)), "audio/wav"), max_chunk_ms=1000)
 
     assert len(requests) == 2
     for request in requests:
@@ -167,7 +167,7 @@ def test_applies_request_options_to_every_request(create_chunked: _CreateChunked
     create_chunked(
         requests,
         file=_wav(2000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
         request_options={"additional_headers": {"X-Trace": "abc"}},
     )
 
@@ -178,7 +178,7 @@ def test_sends_nothing_when_the_recording_cannot_be_split(create_chunked: _Creat
     requests: typing.List[httpx.Request] = []
 
     with pytest.raises(ValueError, match="end_ms must not exceed"):
-        create_chunked(requests, file=_wav(2000), chunk_ms=1000, end_ms=2500)
+        create_chunked(requests, file=_wav(2000), max_chunk_ms=1000, end_ms=2500)
 
     assert requests == []
 
@@ -190,7 +190,7 @@ def test_continues_after_a_chunk_whose_audio_cannot_be_decoded(create_chunked: _
         requests,
         lambda number: _failed(400, "audio_decode_failed") if number == 2 else _succeeded(number),
         file=_wav(3000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
     )
 
     assert len(requests) == 3
@@ -204,7 +204,7 @@ def test_stops_when_no_chunk_has_decoded_before_a_decode_failure(create_chunked:
     requests: typing.List[httpx.Request] = []
 
     result = create_chunked(
-        requests, lambda number: _failed(400, "audio_decode_failed"), file=_wav(3000), chunk_ms=1000
+        requests, lambda number: _failed(400, "audio_decode_failed"), file=_wav(3000), max_chunk_ms=1000
     )
 
     assert len(requests) == 1
@@ -232,7 +232,7 @@ def test_stops_at_any_other_error_and_records_the_rest_as_not_attempted(
         requests,
         lambda number: failure() if number == 2 else _succeeded(number),
         file=_wav(4000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
     )
 
     assert len(requests) == 2
@@ -258,7 +258,7 @@ def test_copies_no_chunk_after_a_stop(create_chunked: _CreateChunked, monkeypatc
         requests,
         lambda number: _failed(402, "payment_required") if number == 2 else _succeeded(number),
         file=_wav(4000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
     )
 
     assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted", "not_attempted"]
@@ -273,7 +273,7 @@ def test_stops_when_the_connection_drops(create_chunked: _CreateChunked) -> None
             raise httpx.RemoteProtocolError("Server disconnected")
         return _succeeded(number)
 
-    result = create_chunked(requests, respond, file=_wav(3000), chunk_ms=1000)
+    result = create_chunked(requests, respond, file=_wav(3000), max_chunk_ms=1000)
 
     assert len(requests) == 2
     assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted"]
@@ -285,14 +285,17 @@ def test_raises_an_error_that_is_neither_from_the_api_nor_the_connection(create_
         raise RuntimeError("bug")
 
     with pytest.raises(RuntimeError, match="bug"):
-        create_chunked([], respond, file=_wav(2000), chunk_ms=1000)
+        create_chunked([], respond, file=_wav(2000), max_chunk_ms=1000)
 
 
 def test_retries_a_rate_limited_chunk_before_moving_on(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
 
     result = create_chunked(
-        requests, lambda number: _rate_limited() if number == 2 else _succeeded(number), file=_wav(2000), chunk_ms=1000
+        requests,
+        lambda number: _rate_limited() if number == 2 else _succeeded(number),
+        file=_wav(2000),
+        max_chunk_ms=1000,
     )
 
     assert len(requests) == 3
@@ -308,7 +311,7 @@ def test_stops_when_rate_limit_retries_run_out(create_chunked: _CreateChunked) -
         requests,
         lambda number: _rate_limited() if number >= 2 else _succeeded(number),
         file=_wav(3000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
         request_options={"max_retries": 1},
     )
 
@@ -324,7 +327,7 @@ def test_iterator_yields_each_result_before_sending_the_next_chunk(iter_create_c
         requests,
         lambda number: _failed(402, "payment_required") if number == 3 else _succeeded(number),
         file=_wav(4000),
-        chunk_ms=1000,
+        max_chunk_ms=1000,
     )
 
     assert [(chunk.index, chunk.status, sent) for chunk, sent in yielded] == [
@@ -339,7 +342,7 @@ def test_iterator_sends_nothing_when_the_recording_cannot_be_split(iter_create_c
     requests: typing.List[httpx.Request] = []
 
     with pytest.raises(ValueError, match="end_ms must not exceed"):
-        iter_create_chunked(requests, file=_wav(2000), chunk_ms=1000, end_ms=2500)
+        iter_create_chunked(requests, file=_wav(2000), max_chunk_ms=1000, end_ms=2500)
 
     assert requests == []
 
@@ -352,11 +355,11 @@ def test_resuming_at_resume_ms_sends_the_chunk_that_stopped_the_job_and_those_af
         [],
         lambda number: _failed(402, "payment_required") if number == 2 else _succeeded(number),
         file=audio,
-        chunk_ms=1000,
+        max_chunk_ms=1000,
     )
     requests: typing.List[httpx.Request] = []
 
-    resumed = create_chunked(requests, file=audio, chunk_ms=1000, start_ms=stopped.resume_ms)
+    resumed = create_chunked(requests, file=audio, max_chunk_ms=1000, start_ms=stopped.resume_ms)
 
     assert stopped.resume_ms == 1000
     assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(1000, 2000), (2000, 3000), (3000, 4000)]
@@ -374,7 +377,7 @@ def test_resuming_at_resume_ms_sends_the_chunk_that_stopped_the_job_and_those_af
     ],
 )
 def test_resume_ms_is_none_when_no_chunk_stopped_the_job(create_chunked: _CreateChunked, respond: _Respond) -> None:
-    result = create_chunked([], respond, file=_wav(3000), chunk_ms=1000)
+    result = create_chunked([], respond, file=_wav(3000), max_chunk_ms=1000)
 
     assert result.resume_ms is None
 

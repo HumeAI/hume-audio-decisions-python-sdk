@@ -58,33 +58,33 @@ class PlannedChunk:
 def iter_audio_chunks(
     file: File,
     *,
-    chunk_ms: int,
+    max_chunk_ms: int,
     start_ms: typing.Optional[int] = None,
     end_ms: typing.Optional[int] = None,
 ) -> typing.Iterator[AudioChunk]:
     """
     Splits a recording, or part of one, into chunks short enough for the Decisions API.
 
-    Every chunk is `chunk_ms` long except the last, which holds what remains. No chunk is empty.
-    The audio is copied as it is, never decoded or re-encoded, so cuts fall where the format
-    allows:
+    `max_chunk_ms` is the longest a chunk can be. The recording is cut into the fewest chunks that
+    fit, of equal length, so that the last chunk is not a short remainder: 10 minutes and 1 second
+    at a `max_chunk_ms` of 300000 is cut into 3 chunks of about 200 seconds, not 2 of 5 minutes
+    and 1 of 1 second. No chunk is empty. The audio is copied as it is, never decoded or
+    re-encoded, so cuts fall where the format allows:
 
-    - A WAV file is cut between samples, so a chunk can start or end up to one sample earlier than
-      `start_ms` plus a whole multiple of `chunk_ms`. Each chunk is a new WAV file with the
-      recording's sample format and only its audio; other chunks in the file, such as metadata,
-      are left out.
-    - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate. Each
-      chunk holds as many whole frames as fit in `chunk_ms`, so it can be up to one frame shorter,
-      and `start_ms` and `end_ms` move to the nearest frame boundary. A frame can store part of
-      its audio data in the frames before it, and its sound continues from the frame before, so
-      each chunk also starts with the frames its first new frame needs to decode exactly. That is
-      usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames count
-      toward `chunk_ms` and repeat the end of the previous chunk, or start before `start_ms`. Each
-      chunk holds only the recording's frames; tags, and the header frame that states the whole
-      file's length, are left out. When that header frame has a LAME tag, as files from LAME and
-      ffmpeg do, it states the silence the encoder added at each end, which players skip. Times are
-      then measured from where a player starts the whole file, so the first chunk starts before 0,
-      by about 25 ms for a typical 44.1 kHz file, and the last ends where the player stops.
+    - A WAV file is cut between samples. Each chunk is a new WAV file with the recording's sample
+      format and only its audio; other chunks in the file, such as metadata, are left out.
+    - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
+      chunks can differ in length by a frame, and `start_ms` and `end_ms` move to the nearest frame
+      boundary. A frame can store part of its audio data in the frames before it, and its sound
+      continues from the frame before, so each chunk also starts with the frames its first new
+      frame needs to decode exactly. That is usually a few frames, and up to about 2 seconds at the
+      lowest bitrates. Those frames count toward `max_chunk_ms` and repeat the end of the previous
+      chunk, or start before `start_ms`. Each chunk holds only the recording's frames; tags, and
+      the header frame that states the whole file's length, are left out. When that header frame
+      has a LAME tag, as files from LAME and ffmpeg do, it states the silence the encoder added at
+      each end, which players skip. Times are then measured from where a player starts the whole
+      file, so the first chunk starts before 0, by about 25 ms for a typical 44.1 kHz file, and the
+      last ends where the player stops.
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
@@ -102,10 +102,10 @@ def iter_audio_chunks(
         extensible WAV header. A file object is read in full from its start and left open. A `str` is the
         file's contents, not a path.
 
-    chunk_ms : int
-        Duration of each chunk in milliseconds, from 1 to 300000. A WAV chunk must also be at most
-        63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files of
-        up to about 210 kB per second, such as 48 kHz 16-bit stereo.
+    max_chunk_ms : int
+        The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
+        most 63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files
+        of up to about 210 kB per second, such as 48 kHz 16-bit stereo.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -123,7 +123,7 @@ def iter_audio_chunks(
     Raises
     ------
     ValueError
-        chunk_ms is out of range, too long for a WAV chunk to fit the API's size limit, or too
+        max_chunk_ms is out of range, too long for a WAV chunk to fit the API's size limit, or too
         short for an MP3 chunk to hold a new frame and the frames it needs, start_ms and end_ms do
         not select audio within the recording, or the recording is empty or not a file this helper
         supports, such as a compressed WAV or RF64 file. Any damage to an MP3 file is found before
@@ -134,25 +134,25 @@ def iter_audio_chunks(
     from hume_decisions.audio_helpers import iter_audio_chunks
 
     with open("call.wav", "rb") as f:
-        chunks = iter_audio_chunks(f, chunk_ms=60_000)
+        chunks = iter_audio_chunks(f, max_chunk_ms=60_000)
     for chunk in chunks:
         print(chunk.index, chunk.start_ms, chunk.end_ms, len(chunk.data))
     """
-    chunks = plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    chunks = plan_audio_chunks(file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms)
     return (AudioChunk(chunk.index, chunk.start_ms, chunk.end_ms, chunk.build()) for chunk in chunks)
 
 
 def plan_audio_chunks(
     file: File,
     *,
-    chunk_ms: int,
+    max_chunk_ms: int,
     start_ms: typing.Optional[int] = None,
     end_ms: typing.Optional[int] = None,
 ) -> typing.Iterator[PlannedChunk]:
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
-    chunk_ms = _check_integer("chunk_ms", chunk_ms)
-    if not 1 <= chunk_ms <= MAX_CHUNK_MS:
-        raise ValueError(f"chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {chunk_ms}.")
+    max_chunk_ms = _check_integer("max_chunk_ms", max_chunk_ms)
+    if not 1 <= max_chunk_ms <= MAX_CHUNK_MS:
+        raise ValueError(f"max_chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {max_chunk_ms}.")
     start = 0 if start_ms is None else _check_integer("start_ms", start_ms)
     if start < 0:
         raise ValueError(f"start_ms must not be negative, got {start}.")
@@ -162,9 +162,9 @@ def plan_audio_chunks(
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
     data, given_as_str = _read(file)
     if is_wav(data):
-        return _wav_chunks(data, parse_wav(data), chunk_ms, start, end_ms)
+        return _wav_chunks(data, parse_wav(data), max_chunk_ms, start, end_ms)
     if is_mp3(data):
-        return _mp3_chunks(data, parse_mp3(data), chunk_ms, start, end_ms)
+        return _mp3_chunks(data, parse_mp3(data), max_chunk_ms, start, end_ms)
     message = "Unsupported audio format. Only MP3 and WAV files can be split into chunks."
     if given_as_str:
         message += (
@@ -198,7 +198,7 @@ def _check_range(duration_ms: int, start_ms: int, end_ms: typing.Optional[int]) 
 
 
 def _wav_chunks(
-    data: memoryview, wav: WavAudio, chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
+    data: memoryview, wav: WavAudio, max_chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
 ) -> typing.Iterator[PlannedChunk]:
     if wav.sample_count == 0:
         raise ValueError("The audio is empty.")
@@ -209,41 +209,41 @@ def _wav_chunks(
         last = wav.sample_count
     else:
         last = min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
-    _check_wav_size(wav, chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
+    _check_wav_size(wav, max_chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
     return _plan(
-        _wav_cuts(wav, chunk_ms, start_ms, last),
+        _wav_cuts(wav, max_chunk_ms, _to_sample(start_ms, wav.sample_rate), last),
         functools.partial(_to_ms, sample_rate=wav.sample_rate),
         functools.partial(wav_chunk, data, wav),
     )
 
 
-def _check_wav_size(wav: WavAudio, chunk_ms: int, range_samples: int) -> None:
+def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> None:
     # An MP3 chunk needs no such check: at the highest bitrate, 5 minutes of MP3 is about 12 MB.
     # The header holds the RIFF, fmt and data chunk headers, and the data can need a padding byte.
     header_bytes = 28 + len(wav.fmt) + 1
-    samples = min(-(-chunk_ms * wav.sample_rate // 1000), range_samples)
+    samples = min(-(-max_chunk_ms * wav.sample_rate // 1000), range_samples)
     if header_bytes + samples * wav.frame_bytes <= MAX_CHUNK_BYTES:
         return
     fitting_ms = (MAX_CHUNK_BYTES - header_bytes) // wav.frame_bytes * 1000 // wav.sample_rate
     raise ValueError(
-        f"chunk_ms must be at most {fitting_ms} for this WAV file, so that each chunk stays within the"
+        f"max_chunk_ms must be at most {fitting_ms} for this WAV file, so that each chunk stays within the"
         f" {MAX_CHUNK_BYTES} bytes the API accepts along with the request."
     )
 
 
 def _mp3_chunks(
-    data: memoryview, mp3: Mp3Audio, chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
+    data: memoryview, mp3: Mp3Audio, max_chunk_ms: int, start_ms: int, end_ms: typing.Optional[int]
 ) -> typing.Iterator[PlannedChunk]:
     if mp3.frame_count == 0:
         raise ValueError("The audio is empty.")
     duration_ms = _mp3_time_ms(mp3, mp3.frame_count)
     _check_range(duration_ms, start_ms, end_ms)
-    # Rounding down keeps every chunk within chunk_ms, so a chunk_ms of 300000 stays within the
+    # Rounding down keeps every chunk within max_chunk_ms, so a max_chunk_ms of 300000 stays within the
     # API's limit.
-    frames_per_chunk = chunk_ms * mp3.sample_rate // (1000 * mp3.samples_per_frame)
+    frames_per_chunk = max_chunk_ms * mp3.sample_rate // (1000 * mp3.samples_per_frame)
     frame_ms = _frames_ms(mp3, 1)
     if frames_per_chunk == 0:
-        raise ValueError(f"chunk_ms must be at least {frame_ms} ms, the length of one frame of this MP3 file.")
+        raise ValueError(f"max_chunk_ms must be at least {frame_ms} ms, the length of one frame of this MP3 file.")
     # Times given by the caller are often ones a chunk reported, which are rounded to the
     # millisecond, so they move to the nearest frame boundary rather than the one before. The start
     # and end of the recording can fall partway through a frame, so they keep that whole frame.
@@ -257,7 +257,7 @@ def _mp3_chunks(
     needed_before = max(mp3.frames_needed_before(frame) for frame in range(first, last))
     if frames_per_chunk <= needed_before:
         raise ValueError(
-            f"chunk_ms must be at least {_frames_ms(mp3, needed_before + 1)} ms for this MP3 file. Its frames"
+            f"max_chunk_ms must be at least {_frames_ms(mp3, needed_before + 1)} ms for this MP3 file. Its frames"
             f" need up to {needed_before} frames before them to decode, and a chunk must hold those along with"
             " at least one new frame."
         )
@@ -283,27 +283,45 @@ def _mp3_time_ms(mp3: Mp3Audio, frame: int) -> int:
     return _to_ms(min(frame * mp3.samples_per_frame, mp3.end_sample) - mp3.leading_samples, mp3.sample_rate)
 
 
-def _mp3_cuts(mp3: Mp3Audio, frames_per_chunk: int, first: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
+def _mp3_cuts(mp3: Mp3Audio, frames_per_chunk: int, first: int, last: int) -> typing.List[typing.Tuple[int, int]]:
+    # Filling every chunk gives the fewest chunks but can leave a short last chunk. The shortest
+    # chunk length that needs no more chunks than that shares the frames out evenly instead.
+    cuts = typing.cast(typing.List[typing.Tuple[int, int]], _fill_mp3_chunks(mp3, frames_per_chunk, first, last))
+    low, high = 1, frames_per_chunk
+    while low < high:
+        middle = (low + high) // 2
+        shorter = _fill_mp3_chunks(mp3, middle, first, last)
+        if shorter is not None and len(shorter) <= len(cuts):
+            cuts, high = shorter, middle
+        else:
+            low = middle + 1
+    return cuts
+
+
+def _fill_mp3_chunks(
+    mp3: Mp3Audio, frames_per_chunk: int, first: int, last: int
+) -> typing.Optional[typing.List[typing.Tuple[int, int]]]:
+    """Cuts chunks of `frames_per_chunk` frames, or None when a chunk cannot hold a new frame."""
+    cuts: typing.List[typing.Tuple[int, int]] = []
     new = first
     while new < last:
         # Without the frames before it, the first new frame decodes wrongly. They repeat the end of
         # the previous chunk.
         start = new - mp3.frames_needed_before(new)
+        if start + frames_per_chunk <= new:
+            return None
         end = min(start + frames_per_chunk, last)
-        yield start, end
+        cuts.append((start, end))
         new = end
+    return cuts
 
 
-def _wav_cuts(wav: WavAudio, chunk_ms: int, start_ms: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
-    start = _to_sample(start_ms, wav.sample_rate)
-    index = 0
-    while start < last:
-        # Each cut is computed from start_ms rather than from the previous cut, so rounding does not
-        # accumulate.
-        end = min(_to_sample(start_ms + (index + 1) * chunk_ms, wav.sample_rate), last)
-        yield start, end
-        index += 1
-        start = end
+def _wav_cuts(wav: WavAudio, max_chunk_ms: int, first: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
+    # When max_chunk_ms is not a whole number of samples, a chunk can be up to one sample longer.
+    most = -(-max_chunk_ms * wav.sample_rate // 1000)
+    count = -(-(last - first) // most)
+    for index in range(count):
+        yield first + (last - first) * index // count, first + (last - first) * (index + 1) // count
 
 
 def _plan(

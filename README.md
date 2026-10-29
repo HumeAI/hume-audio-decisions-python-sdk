@@ -161,12 +161,12 @@ asyncio.run(main())
 
 ## Long recordings
 
-`decisions.create_chunked` never sends the recording to the model as one file. It cuts the recording into chunks of `chunk_ms` and sends each chunk to the API in its own `create` request. The model processes each chunk independently: it hears only that chunk, knows nothing of the chunks before or after it, and answers every question about that chunk alone. Each chunk gets its own response with its own `run_id` and is billed on its own. Nothing combines the answers across chunks, so you get one response per chunk.
+`decisions.create_chunked` never sends the recording to the model as one file. It cuts the recording into chunks no longer than `max_chunk_ms` and sends each chunk to the API in its own `create` request. The model processes each chunk independently: it hears only that chunk, knows nothing of the chunks before or after it, and answers every question about that chunk alone. Each chunk gets its own response with its own `run_id` and is billed on its own. Nothing combines the answers across chunks, so you get one response per chunk.
 
-`chunk_ms` sets the length of each chunk and has no default, because it decides how many requests the job sends. A WAV recording is sent as its duration divided by `chunk_ms` requests, rounded up: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. An MP3 recording can take more requests, because each chunk holds only whole frames and starts with frames repeated from the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated frames, so they can add several. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
+`max_chunk_ms` sets the longest a chunk can be and has no default, because it decides how many requests the job sends. The recording is cut into the fewest chunks that fit, of equal length, so the last chunk is not a short remainder: a 32-minute call at 300000 ms is cut into 7 chunks of about 4 minutes 34 seconds, not 6 of 5 minutes and 1 of 2 minutes. A WAV recording is sent as its duration divided by `max_chunk_ms` requests, rounded up: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. An MP3 recording can take more requests, because each chunk holds only whole frames and starts with frames repeated from the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated frames, so they can add several. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
 
-1. Use 300000, the longest chunk the API accepts, for the fewest requests. A WAV chunk must also fit the API's limit on request size, which 5 minutes of 48 kHz 16-bit stereo does. Stereo WAV files at 48 kHz in 24-bit or 32-bit float need shorter chunks, and `create_chunked` raises a `ValueError` naming the longest `chunk_ms` that fits before it sends anything.
-2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers one minute.
+1. Use 300000, the longest chunk the API accepts, for the fewest requests. A WAV chunk must also fit the API's limit on request size, which 5 minutes of 48 kHz 16-bit stereo does. Stereo WAV files at 48 kHz in 24-bit or 32-bit float need shorter chunks, and `create_chunked` raises a `ValueError` naming the largest `max_chunk_ms` that fits before it sends anything.
+2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers at most one minute.
 
 ```python
 from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
@@ -183,7 +183,7 @@ with open("long_call.wav", "rb") as audio:
                 "talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?"),
             },
         ),
-        chunk_ms=300_000,
+        max_chunk_ms=300_000,
     )
 
 for chunk in result.chunks:
@@ -220,7 +220,7 @@ To ask how much of the call something describes, count the chunks whose `noul` p
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 
 1. A WAV file is cut between samples.
-2. An MP3 file is cut between frames, which last 24 to 72 ms, so a chunk can be up to one frame shorter than `chunk_ms`. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
+2. An MP3 file is cut between frames, which last 24 to 72 ms, so chunks can differ in length by a frame or more. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
 
 Chunks are sent one at a time, in order, and a request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
 
@@ -246,7 +246,7 @@ request = DecisionsRequest(
 
 with open("long_call.wav", "rb") as audio:
     for chunk in client.decisions.iter_create_chunked(
-        file=("long_call.wav", audio, "audio/wav"), request=request, chunk_ms=300_000
+        file=("long_call.wav", audio, "audio/wav"), request=request, max_chunk_ms=300_000
     ):
         if chunk.response is not None:
             with open(f"chunk_{chunk.index}_{chunk.start_ms}.json", "w") as saved:
@@ -273,7 +273,7 @@ async def main() -> None:
             return await client.decisions.create(file=("chunk.wav", chunk.data, "audio/wav"), request=request)
 
     with open("long_call.wav", "rb") as audio:
-        chunks = list(iter_audio_chunks(audio, chunk_ms=300_000))
+        chunks = list(iter_audio_chunks(audio, max_chunk_ms=300_000))
     responses = await asyncio.gather(*(send(chunk) for chunk in chunks), return_exceptions=True)
     for chunk, response in zip(chunks, responses):
         print(chunk.index, chunk.start_ms, response)
