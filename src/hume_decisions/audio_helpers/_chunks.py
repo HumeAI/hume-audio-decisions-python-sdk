@@ -83,10 +83,10 @@ def iter_audio_chunks(
     No chunk is empty. Apart from the WAV mixdown `downmix_strategy` asks for, the audio is copied
     as it is, never decoded or re-encoded, so cuts fall where the format allows:
 
-    - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one sample before
-      `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that grid. Each chunk
-      is a new WAV file in the sample format of the mixed-down audio, holding only its audio; other
-      chunks in the file, such as metadata, are left out.
+    - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one
+      sample before `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that
+      grid. Each chunk is a new WAV file in the sample format of the mixed-down audio, holding only
+      its audio; other chunks in the file, such as metadata, are left out.
     - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
       chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
       than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can
@@ -95,11 +95,11 @@ def iter_audio_chunks(
       That is usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames
       count toward `max_chunk_ms` and repeat the end of the previous chunk, or start before
       `start_ms`. Each chunk holds only the recording's frames; tags, and the header frame that
-      states the whole file's length, are left out. When that header frame
-      has a LAME tag, as files from LAME and ffmpeg do, it states the silence the encoder added at
-      each end, which players skip. Times are then measured from where a player starts the whole
-      file, so the first chunk starts before 0, by about 25 ms for a typical 44.1 kHz file, and the
-      last ends where the player stops.
+      states the whole file's length, are left out. When that header frame has a LAME tag, as files
+      from LAME and ffmpeg do, it states the silence the encoder added at each end, which players
+      skip. Times are then measured from where a player starts the whole file, so the first chunk
+      starts before 0, by about 25 ms for a typical 44.1 kHz file, and the last ends where the
+      player stops.
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
@@ -127,9 +127,9 @@ def iter_audio_chunks(
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
         most 24,000,000 bytes, so that the API accepts it. 5 minutes of WAV fits only at just under
         80,000 bytes per second, and always fits for mono or stereo under "mix". With "even", a WAV
-        file that does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
-        that is not mixed down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at
-        48 kHz.
+        file that does not fit is cut into shorter chunks that do. With "fixed", it raises, and
+        16-bit stereo that is not mixed down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz
+        and 124999 at 48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -170,12 +170,12 @@ def iter_audio_chunks(
     ------
     ValueError
         split is not "even" or "fixed", downmix_strategy is not "mix", "first_channel" or None,
-        max_chunk_ms is out of range, too long with "fixed" for a
-        WAV chunk to fit the API's size limit, or too short for an MP3 chunk to hold a new frame and
-        the frames it needs, start_ms and end_ms do not select audio within the recording, or the
-        recording is empty or not a file this helper supports, such as a compressed WAV or RF64
-        file. Any damage to an MP3 file is found before this call returns, so no chunk is produced
-        from a file that cannot be read to the end.
+        max_chunk_ms is out of range, too long with "fixed" for a WAV chunk to fit the API's size
+        limit, or too short for an MP3 chunk to hold a new frame and the frames it needs, start_ms
+        and end_ms do not select audio within the recording, or the recording is empty or not a file
+        this helper supports, such as a compressed WAV or RF64 file. Any damage to an MP3 file is
+        found before this call returns, so no chunk is produced from a file that cannot be read to
+        the end.
 
     Examples
     --------
@@ -261,7 +261,7 @@ def _wav_chunks(
         cuts = _even_wav_cuts(wav, max_chunk_ms, first, last)
     else:
         _check_wav_size(wav, max_chunk_ms, last - first)
-        cuts = _fixed_wav_cuts(wav, max_chunk_ms, start_ms, last)
+        cuts = _fixed_wav_cuts(wav, max_chunk_ms, start_ms, first, last)
     return _plan(
         cuts,
         functools.partial(_to_ms, sample_rate=wav.sample_rate),
@@ -386,9 +386,9 @@ def _even_wav_cuts(wav: WavAudio, max_chunk_ms: int, first: int, last: int) -> t
 
 
 def _fixed_wav_cuts(
-    wav: WavAudio, max_chunk_ms: int, start_ms: int, last: int
+    wav: WavAudio, max_chunk_ms: int, start_ms: int, first: int, last: int
 ) -> typing.Iterator[typing.Tuple[int, int]]:
-    start = _to_sample(start_ms, wav.sample_rate)
+    start = first
     index = 0
     while start < last:
         # Each cut is computed from start_ms rather than from the previous cut, so rounding does not
