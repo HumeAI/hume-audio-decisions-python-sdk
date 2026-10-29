@@ -25,36 +25,35 @@ _Samples = npt.NDArray[np.float64]
 
 
 def downmix_wav(
-    data: memoryview, wav: WavAudio, strategy: DownmixStrategy
-) -> typing.Optional[typing.Tuple[memoryview, WavAudio]]:
+    data: memoryview, wav: WavAudio, strategy: typing.Optional[DownmixStrategy]
+) -> typing.Tuple[memoryview, WavAudio]:
     """
     The samples of `wav` resampled to at most MODEL_SAMPLE_RATE and mixed down by `strategy`, with a
-    description of them, or None when the audio needs no change.
+    description of them, or `data` and `wav` themselves when the audio needs no change.
     """
+    if strategy is None:
+        return data, wav
+    mixes = strategy == "mix" and wav.channels == 2
     # ffmpeg weighs more than two channels by their speaker positions and leaves out the LFE channel,
     # so mixing them here would change what the model hears. Resampling each one changes nothing,
     # because mixing and resampling can be done in either order.
     channels = wav.channels if strategy == "mix" and wav.channels > 2 else 1
     sample_rate = min(wav.sample_rate, MODEL_SAMPLE_RATE)
     if channels == wav.channels and sample_rate == wav.sample_rate:
-        return None
-    mixes = strategy == "mix" and wav.channels == 2
+        return data, wav
     frames = _frames(data, wav)
 
     def read(start: int, stop: int) -> _Samples:
-        samples = _decode(frames[start:stop], wav)
         if mixes:
             # ffmpeg adds the two channels at -3 dB each when it writes floating point, as the API does.
-            return samples.sum(axis=1, keepdims=True) * math.sqrt(0.5)
-        return samples[:, :channels]
+            return _decode(frames[start:stop], wav).sum(axis=1, keepdims=True) * math.sqrt(0.5)
+        return _decode(frames[start:stop, :channels], wav)
 
     count = -(-wav.sample_count * sample_rate // wav.sample_rate)
-    if mixes:
-        # The sum can exceed the range of an integer format, so it is kept as floating point, which is
-        # how the model receives every sample.
-        converted = samples_wav(channels, sample_rate, 4, True, count)
-    else:
-        converted = samples_wav(channels, sample_rate, wav.sample_width, wav.is_float, count)
+    # A mix can exceed the range of an integer format, so it is kept as floating point, which is how
+    # the model receives every sample.
+    sample_width, is_float = (4, True) if mixes else (wav.sample_width, wav.is_float)
+    converted = samples_wav(channels, sample_rate, sample_width, is_float, count)
     blocks: typing.Iterator[typing.Tuple[int, _Samples]]
     if sample_rate == wav.sample_rate:
         blocks = ((start, read(start, min(start + _BLOCK, count))) for start in range(0, count, _BLOCK))

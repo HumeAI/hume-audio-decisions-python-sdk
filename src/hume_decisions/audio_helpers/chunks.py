@@ -218,10 +218,7 @@ def plan_audio_chunks(
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
     data, given_as_str = _read(file)
     if is_wav(data):
-        wav = parse_wav(data)
-        converted = None if downmix_strategy is None else downmix_wav(data, wav, downmix_strategy)
-        if converted is not None:
-            data, wav = converted
+        data, wav = downmix_wav(data, parse_wav(data), downmix_strategy)
         return _wav_chunks(data, wav, max_chunk_ms, start, end_ms, split)
     if is_mp3(data):
         return _mp3_chunks(data, parse_mp3(data), max_chunk_ms, start, end_ms, split)
@@ -240,7 +237,6 @@ def downmix_file(file: File, downmix_strategy: typing.Optional[DownmixStrategy])
     if downmix_strategy is None:
         return file
     data, _ = _read(file)
-    converted = None
     if is_wav(data):
         try:
             wav = parse_wav(data)
@@ -248,10 +244,9 @@ def downmix_file(file: File, downmix_strategy: typing.Optional[DownmixStrategy])
             # A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
             pass
         else:
-            converted = downmix_wav(data, wav, downmix_strategy)
-    if converted is not None:
-        samples, wav = converted
-        return with_content(file, wav_chunk(samples, wav, 0, wav.sample_count))
+            samples, converted = downmix_wav(data, wav, downmix_strategy)
+            if converted is not wav:
+                return with_content(file, wav_chunk(samples, converted, 0, converted.sample_count))
     if isinstance(file[1] if isinstance(file, tuple) else file, (str, bytes)):
         return file
     # A stream that has been read cannot always be read again, so what was read is sent instead.

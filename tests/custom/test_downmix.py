@@ -74,11 +74,11 @@ def _read(file: bytes) -> _Audio:
 
 def _downmix(file: bytes, strategy: DownmixStrategy = "mix") -> typing.Optional[bytes]:
     data = memoryview(file)
-    converted = downmix_wav(data, parse_wav(data), strategy)
-    if converted is None:
+    wav = parse_wav(data)
+    samples, converted = downmix_wav(data, wav, strategy)
+    if converted is wav:
         return None
-    samples, wav = converted
-    return wav_chunk(samples, wav, 0, wav.sample_count)
+    return wav_chunk(samples, converted, 0, converted.sample_count)
 
 
 def _noise(frames: int, channels: int) -> _Samples:
