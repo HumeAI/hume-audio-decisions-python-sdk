@@ -5,6 +5,7 @@ import typing
 
 import numpy as np
 import numpy.typing as npt
+from ._integers import ceil_div
 from ._wav import WavAudio, samples_wav
 
 DownmixStrategy = typing.Literal["mix", "first_channel"]
@@ -24,6 +25,11 @@ _BLOCK = 8192
 _Samples = npt.NDArray[np.float64]
 
 
+def check_downmix_strategy(strategy: typing.Optional[DownmixStrategy]) -> None:
+    if strategy not in ("mix", "first_channel", None):
+        raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {strategy!r}.')
+
+
 def downmix_wav(
     data: memoryview, wav: WavAudio, strategy: typing.Optional[DownmixStrategy]
 ) -> typing.Tuple[memoryview, WavAudio]:
@@ -38,7 +44,7 @@ def downmix_wav(
         return data, wav
     mixes = strategy == "mix" and wav.channels == 2
     sample_rate = min(wav.sample_rate, MODEL_SAMPLE_RATE)
-    count = -(-wav.sample_count * sample_rate // wav.sample_rate)
+    count = ceil_div(wav.sample_count * sample_rate, wav.sample_rate)
     # The API converts every sample to 32-bit floating point, so writing that loses nothing and cannot
     # clip, but it is larger than some recordings that the API would convert just the same.
     converted = samples_wav(1, sample_rate, 4, True, count)

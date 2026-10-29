@@ -25,7 +25,7 @@ from hume_decisions.audio_helpers import (
     ChunkedDecisionsResult,
     ChunkResult,
     DownmixStrategy,
-    chunks,
+    _chunks,
     iter_audio_chunks,
 )
 from hume_decisions.core import ApiError
@@ -387,8 +387,8 @@ def test_copies_no_chunk_after_a_stop(create_chunked: _CreateChunked, monkeypatc
         copied.append(start)
         return original(data, audio, start, end)
 
-    original = chunks.wav_chunk
-    monkeypatch.setattr(chunks, "wav_chunk", wav_chunk)
+    original = _chunks.wav_chunk
+    monkeypatch.setattr(_chunks, "wav_chunk", wav_chunk)
 
     result = create_chunked(
         requests,

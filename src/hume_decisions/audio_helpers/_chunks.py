@@ -2,12 +2,12 @@
 
 import dataclasses
 import functools
-import io
-import operator
 import typing
 
 from ..core.file import File
-from ._downmix import DownmixStrategy, downmix_wav
+from ._downmix import DownmixStrategy, check_downmix_strategy, downmix_wav
+from ._files import read_file
+from ._integers import ceil_div, check_integer, round_div
 from ._mp3 import Mp3Audio, is_mp3, mp3_chunk, parse_mp3
 from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 
@@ -209,18 +209,18 @@ def plan_audio_chunks(
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
     if split not in ("even", "fixed"):
         raise ValueError(f'split must be "even" or "fixed", got {split!r}.')
-    _check_downmix_strategy(downmix_strategy)
-    max_chunk_ms = _check_integer("max_chunk_ms", max_chunk_ms)
+    check_downmix_strategy(downmix_strategy)
+    max_chunk_ms = check_integer("max_chunk_ms", max_chunk_ms)
     if not 1 <= max_chunk_ms <= MAX_CHUNK_MS:
         raise ValueError(f"max_chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {max_chunk_ms}.")
-    start = 0 if start_ms is None else _check_integer("start_ms", start_ms)
+    start = 0 if start_ms is None else check_integer("start_ms", start_ms)
     if start < 0:
         raise ValueError(f"start_ms must not be negative, got {start}.")
     if end_ms is not None:
-        end_ms = _check_integer("end_ms", end_ms)
+        end_ms = check_integer("end_ms", end_ms)
         if end_ms <= start:
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
-    data, given_as_str = _read(file)
+    data, given_as_str = read_file(file)
     if is_wav(data):
         data, wav = downmix_wav(data, parse_wav(data), downmix_strategy)
         return _wav_chunks(data, wav, max_chunk_ms, start, end_ms, split)
@@ -233,53 +233,6 @@ def plan_audio_chunks(
             " Open the file in binary mode and pass the file object or its bytes."
         )
     raise ValueError(message)
-
-
-def downmix_file(file: File, downmix_strategy: typing.Optional[DownmixStrategy]) -> File:
-    """`file` with a WAV recording mixed down as `downmix_strategy` asks, to send with `create`."""
-    _check_downmix_strategy(downmix_strategy)
-    if downmix_strategy is None:
-        return file
-    data, _ = _read(file)
-    if is_wav(data):
-        try:
-            wav = parse_wav(data)
-        except ValueError:
-            # A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
-            pass
-        else:
-            samples, converted = downmix_wav(data, wav, downmix_strategy)
-            if converted is not wav:
-                return with_content(file, wav_chunk(samples, converted, 0, converted.sample_count))
-    if isinstance(file[1] if isinstance(file, tuple) else file, (str, bytes)):
-        return file
-    # A stream that has been read cannot always be read again, so what was read is sent instead.
-    return with_content(file, bytes(data))
-
-
-def with_content(file: File, data: bytes) -> File:
-    if not isinstance(file, tuple):
-        return data
-    return (file[0], data, *file[2:])
-
-
-def _check_downmix_strategy(downmix_strategy: typing.Optional[DownmixStrategy]) -> None:
-    if downmix_strategy not in ("mix", "first_channel", None):
-        raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {downmix_strategy!r}.')
-
-
-def _read(file: File) -> typing.Tuple[memoryview, bool]:
-    content = file[1] if isinstance(file, tuple) else file
-    if not isinstance(content, (str, bytes)):
-        # Read the way httpx reads a file it uploads, so the chunks cover what `create` would send.
-        try:
-            content.seek(0)
-        except (AttributeError, io.UnsupportedOperation):
-            pass
-        content = content.read()
-    if isinstance(content, str):
-        return memoryview(content.encode("utf-8")), True
-    return memoryview(content), False
 
 
 def _check_range(duration_ms: int, start_ms: int, end_ms: typing.Optional[int]) -> None:
@@ -325,7 +278,7 @@ def _wav_samples_that_fit(wav: WavAudio) -> int:
 
 def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> None:
     fitting = _wav_samples_that_fit(wav)
-    if min(_ceil_div(max_chunk_ms * wav.sample_rate, 1000), range_samples) <= fitting:
+    if min(ceil_div(max_chunk_ms * wav.sample_rate, 1000), range_samples) <= fitting:
         return
     fitting_ms = fitting * 1000 // wav.sample_rate
     raise ValueError(
@@ -375,11 +328,11 @@ def _mp3_chunks(
 
 
 def _frame_at(mp3: Mp3Audio, ms: int) -> int:
-    return _round_div(ms * mp3.sample_rate + 1000 * mp3.leading_samples, 1000 * mp3.samples_per_frame)
+    return round_div(ms * mp3.sample_rate + 1000 * mp3.leading_samples, 1000 * mp3.samples_per_frame)
 
 
 def _frames_ms(mp3: Mp3Audio, frames: int) -> int:
-    return _ceil_div(frames * mp3.samples_per_frame * 1000, mp3.sample_rate)
+    return ceil_div(frames * mp3.samples_per_frame * 1000, mp3.sample_rate)
 
 
 def _mp3_time_ms(mp3: Mp3Audio, frame: int) -> int:
@@ -426,8 +379,8 @@ def _fill_mp3_chunks(
 
 def _even_wav_cuts(wav: WavAudio, max_chunk_ms: int, first: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
     # When max_chunk_ms is not a whole number of samples, a chunk can be up to one sample longer.
-    most = min(_ceil_div(max_chunk_ms * wav.sample_rate, 1000), _wav_samples_that_fit(wav))
-    count = _ceil_div(last - first, most)
+    most = min(ceil_div(max_chunk_ms * wav.sample_rate, 1000), _wav_samples_that_fit(wav))
+    count = ceil_div(last - first, most)
     for index in range(count):
         yield first + (last - first) * index // count, first + (last - first) * (index + 1) // count
 
@@ -461,21 +414,4 @@ def _to_sample(ms: int, sample_rate: int) -> int:
 
 
 def _to_ms(sample: int, sample_rate: int) -> int:
-    return _round_div(sample * 1000, sample_rate)
-
-
-def _round_div(numerator: int, denominator: int) -> int:
-    return (2 * numerator + denominator) // (2 * denominator)
-
-
-def _ceil_div(numerator: int, denominator: int) -> int:
-    return -(-numerator // denominator)
-
-
-def _check_integer(name: str, value: int) -> int:
-    # operator.index also accepts NumPy integers, which are not subclasses of int. Its result is a
-    # plain int, which arithmetic needs because a small NumPy integer can overflow.
-    try:
-        return operator.index(value)
-    except TypeError:
-        raise TypeError(f"{name} must be an integer, got {value!r}.") from None
+    return round_div(sample * 1000, sample_rate)

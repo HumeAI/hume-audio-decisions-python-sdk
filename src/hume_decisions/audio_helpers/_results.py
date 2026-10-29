@@ -9,8 +9,10 @@ from ..core.api_error import ApiError
 from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
+from ._chunks import ChunkSplit, PlannedChunk, plan_audio_chunks
 from ._downmix import DownmixStrategy
-from .chunks import ChunkSplit, PlannedChunk, _check_integer, plan_audio_chunks, with_content
+from ._files import with_content
+from ._integers import check_integer
 
 ChunkStatus = typing.Literal["succeeded", "failed", "not_attempted"]
 
@@ -75,7 +77,7 @@ class ChunkedDecisionsResult:
 
     def __init__(self, chunks: typing.Tuple[ChunkResult, ...], start_ms: typing.Optional[int] = None) -> None:
         object.__setattr__(self, "chunks", chunks)
-        object.__setattr__(self, "start_ms", 0 if start_ms is None else _check_integer("start_ms", start_ms))
+        object.__setattr__(self, "start_ms", 0 if start_ms is None else check_integer("start_ms", start_ms))
 
     @property
     def responses(self) -> typing.List[typing.Optional[DecisionsResponse]]:

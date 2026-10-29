@@ -4,9 +4,9 @@ import asyncio
 import typing
 
 from .. import core
-from ..audio_helpers._downmix import DownmixStrategy
-from ..audio_helpers.chunks import ChunkSplit, downmix_file
-from ..audio_helpers.results import ChunkedDecisionsResult, ChunkResult, iter_send_chunks, iter_send_chunks_async
+from ..audio_helpers import ChunkedDecisionsResult, ChunkResult, ChunkSplit, DownmixStrategy
+from ..audio_helpers._files import downmix_file
+from ..audio_helpers._results import iter_send_chunks, iter_send_chunks_async
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.decisions_request import DecisionsRequest
