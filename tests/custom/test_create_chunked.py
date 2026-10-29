@@ -454,6 +454,20 @@ def test_resume_ms_is_the_job_start_when_an_mp3_job_stops_at_its_first_chunk(
     assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(c.start_ms, c.end_ms) for c in stopped.chunks]
 
 
+def test_resume_ms_is_0_for_a_result_built_from_iterator_results_with_no_start_ms_when_the_first_chunk_stopped_the_job(
+    iter_create_chunked: _IterCreateChunked,
+) -> None:
+    start_ms: typing.Optional[int] = None
+    yielded = iter_create_chunked(
+        [], lambda number: _failed(402, "payment_required"), file=_wav(3000), max_chunk_ms=1000, start_ms=start_ms
+    )
+
+    result = ChunkedDecisionsResult(tuple(chunk for chunk, _ in yielded), start_ms=start_ms)
+
+    assert result.start_ms == 0
+    assert result.resume_ms == 0
+
+
 class _Index:
     # Stands in for a NumPy integer, which is an integer through __index__ without subclassing int.
     def __init__(self, value: int) -> None:
