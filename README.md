@@ -281,7 +281,7 @@ with open("long_call.wav", "rb") as audio:
 
 To resume such a job, keep the results it yields.
 
-1. When a chunk stopped the job, `ChunkedDecisionsResult(tuple(results), start_ms=start_ms).resume_ms` gives where to resume, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and the `start_ms` the job was given.
+1. When a chunk stopped the job, `ChunkedDecisionsResult(results, start_ms=start_ms).resume_ms` gives where to resume, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and the `start_ms` the job was given.
 2. When your process stopped instead, `resume_ms` is `None`. Resume at the `end_ms` of the last chunk you have a result for, not at the `start_ms` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
 
 In both cases, pass the same `end_ms` as the job that stopped. Chunks that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.

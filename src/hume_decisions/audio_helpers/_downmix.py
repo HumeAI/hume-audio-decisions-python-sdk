@@ -26,7 +26,7 @@ _Samples = npt.NDArray[np.float64]
 
 
 def check_downmix_strategy(strategy: typing.Optional[DownmixStrategy]) -> None:
-    if strategy not in ("mix", "first_channel", None):
+    if strategy not in (*typing.get_args(DownmixStrategy), None):
         raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {strategy!r}.')
 
 

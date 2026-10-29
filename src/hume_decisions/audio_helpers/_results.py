@@ -75,8 +75,8 @@ class ChunkedDecisionsResult:
     chunks: typing.Tuple[ChunkResult, ...]
     start_ms: int
 
-    def __init__(self, chunks: typing.Tuple[ChunkResult, ...], start_ms: typing.Optional[int] = None) -> None:
-        object.__setattr__(self, "chunks", chunks)
+    def __init__(self, chunks: typing.Iterable[ChunkResult], start_ms: typing.Optional[int] = None) -> None:
+        object.__setattr__(self, "chunks", tuple(chunks))
         object.__setattr__(self, "start_ms", 0 if start_ms is None else check_integer("start_ms", start_ms))
 
     @property
@@ -100,7 +100,8 @@ class ChunkedDecisionsResult:
         """
         rule = _StopRule()
         for position, chunk in enumerate(self.chunks):
-            if rule.stops(chunk):
+            rule.record(chunk)
+            if rule.stopped:
                 # An MP3 chunk's start_ms includes frames repeated from before it, so resuming there
                 # would send those again as new audio.
                 return self.chunks[position - 1].end_ms if position > 0 else self.start_ms
@@ -134,18 +135,17 @@ def _send(
     create: typing.Callable[[File], DecisionsResponse], file: File, chunks: typing.Iterable[PlannedChunk]
 ) -> typing.Iterator[ChunkResult]:
     rule = _StopRule()
-    stopped = False
     # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
-        if not stopped:
+        if not rule.stopped:
             try:
                 response = create(with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
         result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
-        stopped = stopped or rule.stops(result)
+        rule.record(result)
         yield result
 
 
@@ -171,17 +171,16 @@ async def iter_send_chunks_async(
         downmix_strategy=downmix_strategy,
     )
     rule = _StopRule()
-    stopped = False
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
-        if not stopped:
+        if not rule.stopped:
             try:
                 response = await create(with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
         result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
-        stopped = stopped or rule.stops(result)
+        rule.record(result)
         yield result
 
 
@@ -189,12 +188,13 @@ class _StopRule:
     # Sending chunks and finding resume_ms in a finished result must agree on which chunk stopped the
     # job, so both feed the chunks through this in order.
     def __init__(self) -> None:
+        self.stopped = False
         self._any_succeeded = False
 
-    def stops(self, chunk: ChunkResult) -> bool:
-        stopped = chunk.error is not None and not _fails_only_this_chunk(chunk.error, self._any_succeeded)
+    def record(self, chunk: ChunkResult) -> None:
+        if chunk.error is not None and not _fails_only_this_chunk(chunk.error, self._any_succeeded):
+            self.stopped = True
         self._any_succeeded = self._any_succeeded or chunk.response is not None
-        return stopped
 
 
 def _fails_only_this_chunk(error: Exception, after_success: bool) -> bool:

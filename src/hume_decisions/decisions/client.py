@@ -340,17 +340,15 @@ class DecisionsClient:
                 print(chunk.start_ms, chunk.status, chunk.error)
         """
         return ChunkedDecisionsResult(
-            tuple(
-                self.iter_create_chunked(
-                    request=request,
-                    file=file,
-                    max_chunk_ms=max_chunk_ms,
-                    start_ms=start_ms,
-                    end_ms=end_ms,
-                    split=split,
-                    downmix_strategy=downmix_strategy,
-                    request_options=request_options,
-                )
+            self.iter_create_chunked(
+                request=request,
+                file=file,
+                max_chunk_ms=max_chunk_ms,
+                start_ms=start_ms,
+                end_ms=end_ms,
+                split=split,
+                downmix_strategy=downmix_strategy,
+                request_options=request_options,
             ),
             start_ms=start_ms,
         )
@@ -489,8 +487,9 @@ class AsyncDecisionsClient:
 
         asyncio.run(main())
         """
-        # Mixing down a long recording takes long enough to hold up the event loop.
-        file = await asyncio.to_thread(downmix_file, file, downmix_strategy)
+        if downmix_strategy is not None:
+            # Mixing down a long recording takes long enough to hold up the event loop.
+            file = await asyncio.to_thread(downmix_file, file, downmix_strategy)
         _response = await self._raw_client.create(request=request, file=file, request_options=request_options)
         return _response.data
 
@@ -703,20 +702,18 @@ class AsyncDecisionsClient:
         asyncio.run(main())
         """
         return ChunkedDecisionsResult(
-            tuple(
-                [
-                    chunk
-                    async for chunk in self.iter_create_chunked(
-                        request=request,
-                        file=file,
-                        max_chunk_ms=max_chunk_ms,
-                        start_ms=start_ms,
-                        end_ms=end_ms,
-                        split=split,
-                        downmix_strategy=downmix_strategy,
-                        request_options=request_options,
-                    )
-                ]
-            ),
+            [
+                chunk
+                async for chunk in self.iter_create_chunked(
+                    request=request,
+                    file=file,
+                    max_chunk_ms=max_chunk_ms,
+                    start_ms=start_ms,
+                    end_ms=end_ms,
+                    split=split,
+                    downmix_strategy=downmix_strategy,
+                    request_options=request_options,
+                )
+            ],
             start_ms=start_ms,
         )

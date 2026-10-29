@@ -207,7 +207,7 @@ def plan_audio_chunks(
     downmix_strategy: typing.Optional[DownmixStrategy],
 ) -> typing.Iterator[PlannedChunk]:
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
-    if split not in ("even", "fixed"):
+    if split not in typing.get_args(ChunkSplit):
         raise ValueError(f'split must be "even" or "fixed", got {split!r}.')
     check_downmix_strategy(downmix_strategy)
     max_chunk_ms = check_integer("max_chunk_ms", max_chunk_ms)

@@ -580,7 +580,7 @@ def test_resume_ms_is_0_for_a_result_built_from_iterator_results_with_no_start_m
         [], lambda number: _failed(402, "payment_required"), file=_wav(3000), max_chunk_ms=1000, start_ms=start_ms
     )
 
-    result = ChunkedDecisionsResult(tuple(chunk for chunk, _ in yielded), start_ms=start_ms)
+    result = ChunkedDecisionsResult((chunk for chunk, _ in yielded), start_ms=start_ms)
 
     assert result.start_ms == 0
     assert result.resume_ms == 0
