@@ -90,11 +90,13 @@ class ChunkedDecisionsResult:
         sends the audio of the chunk that stopped the job and the chunks after it again. None when no
         chunk stopped the job.
         """
+        any_succeeded = False
         for position, chunk in enumerate(self.chunks):
-            if chunk.error is not None and not _fails_only_this_chunk(chunk.error, self.chunks[:position]):
+            if chunk.error is not None and not _fails_only_this_chunk(chunk.error, any_succeeded):
                 # An MP3 chunk's start_ms includes frames repeated from before it, so resuming there
                 # would send those again as new audio.
                 return self.chunks[position - 1].end_ms if position > 0 else self.start_ms
+            any_succeeded = any_succeeded or chunk.response is not None
         return None
 
 
@@ -116,22 +118,20 @@ def iter_send_chunks(
 def _send(
     create: typing.Callable[[File], DecisionsResponse], file: File, chunks: typing.Iterable[PlannedChunk]
 ) -> typing.Iterator[ChunkResult]:
-    results: typing.List[ChunkResult] = []
+    any_succeeded = False
     stopped = False
     # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
         if not stopped:
-            data = chunk.build()
             try:
-                response = create(_with_content(file, data))
+                response = create(_with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised, results)
-        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
-        results.append(result)
-        yield result
+                stopped = not _fails_only_this_chunk(raised, any_succeeded)
+        any_succeeded = any_succeeded or response is not None
+        yield ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
 
 
 async def iter_send_chunks_async(
@@ -148,24 +148,22 @@ async def iter_send_chunks_async(
     chunks = await asyncio.to_thread(
         plan_audio_chunks, file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms, split=split
     )
-    results: typing.List[ChunkResult] = []
+    any_succeeded = False
     stopped = False
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
         if not stopped:
-            data = chunk.build()
             try:
-                response = await create(_with_content(file, data))
+                response = await create(_with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised, results)
-        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
-        results.append(result)
-        yield result
+                stopped = not _fails_only_this_chunk(raised, any_succeeded)
+        any_succeeded = any_succeeded or response is not None
+        yield ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
 
 
-def _fails_only_this_chunk(error: Exception, earlier: typing.Sequence[ChunkResult]) -> bool:
+def _fails_only_this_chunk(error: Exception, after_success: bool) -> bool:
     # A decode failure can come from one damaged stretch of the recording, but until some chunk has
     # decoded, the whole file is the likelier cause and every remaining chunk would fail the same way.
     # Any other error, including codes the API adds later, is assumed to fail every remaining chunk,
@@ -174,7 +172,7 @@ def _fails_only_this_chunk(error: Exception, earlier: typing.Sequence[ChunkResul
     decode_failed = (
         isinstance(error, ApiError) and isinstance(error.body, Error) and error.body.code == "audio_decode_failed"
     )
-    return decode_failed and any(result.response is not None for result in earlier)
+    return decode_failed and after_success
 
 
 def _with_content(file: File, data: bytes) -> File:

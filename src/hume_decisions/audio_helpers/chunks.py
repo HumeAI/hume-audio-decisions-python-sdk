@@ -253,7 +253,7 @@ def _wav_samples_that_fit(wav: WavAudio) -> int:
 
 def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> None:
     fitting = _wav_samples_that_fit(wav)
-    if min(-(-max_chunk_ms * wav.sample_rate // 1000), range_samples) <= fitting:
+    if min(_ceil_div(max_chunk_ms * wav.sample_rate, 1000), range_samples) <= fitting:
         return
     fitting_ms = fitting * 1000 // wav.sample_rate
     raise ValueError(
@@ -307,7 +307,7 @@ def _frame_at(mp3: Mp3Audio, ms: int) -> int:
 
 
 def _frames_ms(mp3: Mp3Audio, frames: int) -> int:
-    return -(-frames * mp3.samples_per_frame * 1000 // mp3.sample_rate)
+    return _ceil_div(frames * mp3.samples_per_frame * 1000, mp3.sample_rate)
 
 
 def _mp3_time_ms(mp3: Mp3Audio, frame: int) -> int:
@@ -354,8 +354,8 @@ def _fill_mp3_chunks(
 
 def _even_wav_cuts(wav: WavAudio, max_chunk_ms: int, first: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
     # When max_chunk_ms is not a whole number of samples, a chunk can be up to one sample longer.
-    most = min(-(-max_chunk_ms * wav.sample_rate // 1000), _wav_samples_that_fit(wav))
-    count = -(-(last - first) // most)
+    most = min(_ceil_div(max_chunk_ms * wav.sample_rate, 1000), _wav_samples_that_fit(wav))
+    count = _ceil_div(last - first, most)
     for index in range(count):
         yield first + (last - first) * index // count, first + (last - first) * (index + 1) // count
 
@@ -394,6 +394,10 @@ def _to_ms(sample: int, sample_rate: int) -> int:
 
 def _round_div(numerator: int, denominator: int) -> int:
     return (2 * numerator + denominator) // (2 * denominator)
+
+
+def _ceil_div(numerator: int, denominator: int) -> int:
+    return -(-numerator // denominator)
 
 
 def _check_integer(name: str, value: int) -> int:
