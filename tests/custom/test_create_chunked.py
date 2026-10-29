@@ -412,13 +412,19 @@ def test_resume_ms_is_none_when_no_chunk_stopped_the_job(create_chunked: _Create
     assert result.resume_ms is None
 
 
-def test_resume_ms_is_0_when_an_mp3_job_stops_at_its_first_chunk() -> None:
-    # The first chunk of an MP3 file starts before 0 when the encoder added samples before the recording.
-    result = ChunkedDecisionsResult(
-        (
-            ChunkResult(0, -25, 975, response=None, error=ApiError(status_code=402)),
-            ChunkResult(1, 975, 1975, response=None, error=None),
-        )
+@pytest.mark.parametrize("start_ms, resume_ms", [(None, 0), (1500, 1500)])
+def test_resume_ms_is_the_job_start_when_an_mp3_job_stops_at_its_first_chunk(
+    create_chunked: _CreateChunked, start_ms: typing.Optional[int], resume_ms: int
+) -> None:
+    # The first chunk starts with frames from before the job's start, and before 0 when the encoder
+    # added samples before the recording, so its start_ms is earlier than where the job started.
+    audio = (pathlib.Path(__file__).parent / "assets" / "tone_mpeg25_8k.mp3").read_bytes()
+    stopped = create_chunked(
+        [], lambda number: _failed(402, "payment_required"), file=audio, max_chunk_ms=1000, start_ms=start_ms
     )
 
-    assert result.resume_ms == 0
+    resumed = create_chunked([], file=audio, max_chunk_ms=1000, start_ms=stopped.resume_ms)
+
+    assert stopped.chunks[0].start_ms < resume_ms
+    assert stopped.resume_ms == resume_ms
+    assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(c.start_ms, c.end_ms) for c in stopped.chunks]

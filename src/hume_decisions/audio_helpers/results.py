@@ -64,9 +64,13 @@ class ChunkedDecisionsResult:
     ----------
     chunks : typing.Tuple[ChunkResult, ...]
         One result for each chunk of the requested range.
+
+    start_ms : int
+        The `start_ms` the job was given, or 0 when it was given none.
     """
 
     chunks: typing.Tuple[ChunkResult, ...]
+    start_ms: int = 0
 
     @property
     def responses(self) -> typing.List[typing.Optional[DecisionsResponse]]:
@@ -81,18 +85,16 @@ class ChunkedDecisionsResult:
     @property
     def resume_ms(self) -> typing.Optional[int]:
         """
-        Where the chunk before the one that stopped the job ends, or 0 when the first chunk stopped
-        it, to pass as `start_ms`, with the same `end_ms`, to a new job that sends the audio of the
-        chunk that stopped the job and the chunks after it again. None when no chunk stopped the job.
+        Where the chunk before the one that stopped the job ends, or the job's `start_ms` when the
+        first chunk stopped it, to pass as `start_ms`, with the same `end_ms`, to a new job that
+        sends the audio of the chunk that stopped the job and the chunks after it again. None when no
+        chunk stopped the job.
         """
         for position, chunk in enumerate(self.chunks):
             if chunk.error is not None and not _fails_only_this_chunk(chunk.error, self.chunks[:position]):
-                # An MP3 chunk's start_ms includes frames repeated from the chunk before it, so
-                # resuming there would send those again.
-                if position > 0:
-                    return self.chunks[position - 1].end_ms
-                # The first chunk of an MP3 file can start before 0, and start_ms cannot.
-                return max(0, chunk.start_ms)
+                # An MP3 chunk's start_ms includes frames repeated from before it, so resuming there
+                # would send those again as new audio.
+                return self.chunks[position - 1].end_ms if position > 0 else self.start_ms
         return None
 
 

@@ -314,7 +314,8 @@ class DecisionsClient:
                     split=split,
                     request_options=request_options,
                 )
-            )
+            ),
+            start_ms=0 if start_ms is None else start_ms,
         )
 
 
@@ -644,5 +645,6 @@ class AsyncDecisionsClient:
                         request_options=request_options,
                     )
                 ]
-            )
+            ),
+            start_ms=0 if start_ms is None else start_ms,
         )
