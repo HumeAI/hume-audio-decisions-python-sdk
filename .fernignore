@@ -1,5 +1,6 @@
 # Specify files that shouldn't be modified by Fern
 README.md
+CONTRIBUTING.md
 .fern/replay.lock
 .fern/replay.yml
 .gitattributes

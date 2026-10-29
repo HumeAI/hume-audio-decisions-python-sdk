@@ -6,7 +6,7 @@ Thanks for your interest in contributing to this SDK! This document provides gui
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - pip
 - poetry
 
@@ -61,6 +61,18 @@ The following directories contain generated code:
 - `src/` - API client classes and types
 - Most Python files in the project
 
+### Code Maintained by Hand
+
+Some of the SDK is written by hand rather than generated:
+
+1. `src/hume_decisions/audio_helpers` and `tests/custom`, which are listed in `.fernignore`.
+2. These changes to generated files:
+   1. In `src/hume_decisions/decisions/client.py`, the `downmix_strategy` parameter of `create` and the `iter_create_chunked` and `create_chunked` methods, in both `DecisionsClient` and `AsyncDecisionsClient`.
+   2. The `numpy` dependency in `pyproject.toml`, `requirements.txt` and `poetry.lock`.
+   3. The ffmpeg install step and the build and publish jobs in `.github/workflows/ci.yml`.
+
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/custom` fail if the client methods or the `numpy` dependency are missing, while nothing fails if the changes to `ci.yml` are lost.
+
 ### How to Customize
 
 If you need to customize the SDK, you have two options:
@@ -69,9 +81,8 @@ If you need to customize the SDK, you have two options:
 
 For custom code that should persist across SDK regenerations:
 
-1. Create a `.fernignore` file in the project root
-2. Add file patterns for files you want to preserve (similar to `.gitignore` syntax)
-3. Add your custom code to those files
+1. Add file patterns for files you want to preserve to `.fernignore` in the project root (similar to `.gitignore` syntax)
+2. Add your custom code to those files
 
 Files listed in `.fernignore` will not be overwritten when the SDK is regenerated.
 
