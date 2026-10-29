@@ -7,10 +7,10 @@ import json
 import pathlib
 import random
 import typing
-import wave
 
 import httpx
 import pytest
+from _wav_files import wav_file
 
 from hume_decisions import (
     AsyncDecisionsClient,
@@ -39,13 +39,8 @@ _REQUEST = DecisionsRequest(
 
 
 def _wav(milliseconds: int, *, sample_rate: int = 8000, channels: int = 1) -> bytes:
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav:
-        wav.setnchannels(channels)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        wav.writeframes(random.Random(0).randbytes(sample_rate * milliseconds // 1000 * 2 * channels))
-    return buffer.getvalue()
+    data = random.Random(0).randbytes(sample_rate * milliseconds // 1000 * 2 * channels)
+    return wav_file(data=data, sample_rate=sample_rate, channels=channels)
 
 
 def _parts(request: httpx.Request) -> typing.Dict[str, email.message.Message]:

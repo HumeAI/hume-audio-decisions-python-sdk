@@ -7,18 +7,9 @@ import typing
 import wave
 
 import pytest
+from _wav_files import read_wav, wav_file
 
 from hume_decisions.audio_helpers import iter_audio_chunks
-
-
-def _wav(*, sample_rate: int, channels: int, sample_width: int, data: bytes) -> bytes:
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav:
-        wav.setnchannels(channels)
-        wav.setsampwidth(sample_width)
-        wav.setframerate(sample_rate)
-        wav.writeframes(data)
-    return buffer.getvalue()
 
 
 def _raw_wav(
@@ -60,7 +51,7 @@ def _read(chunk: bytes) -> typing.Tuple[typing.Tuple[int, int, int], bytes]:
 
 def test_wav_is_split_into_the_fewest_equal_chunks_no_longer_than_requested() -> None:
     pcm = _pcm(2500 * 16 * 2)
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
 
@@ -73,7 +64,7 @@ def test_wav_is_split_into_the_fewest_equal_chunks_no_longer_than_requested() ->
 
 
 def test_recording_that_divides_evenly_gives_no_empty_final_chunk() -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2000 * 16 * 2))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2000 * 16 * 2))
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
 
@@ -83,7 +74,7 @@ def test_recording_that_divides_evenly_gives_no_empty_final_chunk() -> None:
 def test_cuts_between_samples_round_down_without_drifting() -> None:
     # At 22,050 Hz a 10 ms chunk is 220.5 samples long.
     pcm = _pcm(22050 * 2 * 2)
-    recording = _wav(sample_rate=22050, channels=2, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=22050, channels=2, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=10, downmix_strategy=None))
 
@@ -96,7 +87,7 @@ def test_cuts_between_samples_round_down_without_drifting() -> None:
 def test_final_samples_are_kept_when_the_duration_rounds_down() -> None:
     # 44,122 samples at 44,100 Hz last 1000.499 ms, which rounds down to 1000 ms.
     pcm = _pcm(44122 * 2)
-    recording = _wav(sample_rate=44100, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=44100, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))
 
@@ -105,7 +96,7 @@ def test_final_samples_are_kept_when_the_duration_rounds_down() -> None:
 
 def test_final_samples_are_kept_when_end_ms_is_the_duration_the_final_chunk_reports() -> None:
     pcm = _pcm(44122 * 2)
-    recording = _wav(sample_rate=44100, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=44100, channels=1, sample_width=2, data=pcm)
     duration_ms = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))[-1].end_ms
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, end_ms=duration_ms, downmix_strategy=None))
@@ -116,7 +107,7 @@ def test_final_samples_are_kept_when_end_ms_is_the_duration_the_final_chunk_repo
 @pytest.mark.parametrize("start_ms", [None, 0])
 def test_recording_shorter_than_half_a_millisecond_gives_one_chunk(start_ms: typing.Optional[int]) -> None:
     pcm = _pcm(2)
-    recording = _wav(sample_rate=3000, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=3000, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=start_ms))
 
@@ -139,7 +130,7 @@ def test_chunks_hold_only_the_fmt_and_data_chunks() -> None:
 def test_odd_sized_audio_is_padded_to_keep_the_file_valid() -> None:
     # 8-bit mono samples are one byte each, so 3 ms at 1 kHz is an odd number of bytes.
     pcm = _pcm(5)
-    recording = _wav(sample_rate=1000, channels=1, sample_width=1, data=pcm)
+    recording = wav_file(sample_rate=1000, channels=1, sample_width=1, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=3))
 
@@ -226,12 +217,12 @@ def test_audio_that_is_neither_mp3_nor_wav_is_rejected() -> None:
 
 def test_empty_recording_is_rejected() -> None:
     with pytest.raises(ValueError, match="empty"):
-        iter_audio_chunks(_wav(sample_rate=16000, channels=1, sample_width=2, data=b""), max_chunk_ms=1000)
+        iter_audio_chunks(wav_file(sample_rate=16000, channels=1, sample_width=2, data=b""), max_chunk_ms=1000)
 
 
 @pytest.mark.parametrize("max_chunk_ms", [0, -1, 300_001])
 def test_chunk_duration_out_of_range_is_rejected(max_chunk_ms: int) -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
 
     with pytest.raises(ValueError, match="max_chunk_ms must be between 1 and 300000"):
         iter_audio_chunks(recording, max_chunk_ms=max_chunk_ms)
@@ -268,7 +259,7 @@ def test_chunk_duration_longer_than_the_api_accepts_is_allowed_when_the_range_is
 
 
 def test_chunk_duration_that_is_not_an_integer_is_rejected() -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
 
     with pytest.raises(TypeError, match="max_chunk_ms must be an integer, got 1.5"):
         iter_audio_chunks(recording, max_chunk_ms=typing.cast(typing.Any, 1.5))
@@ -285,7 +276,7 @@ def test_fixed_wav_chunks_are_cut_on_a_grid_from_the_start_and_the_last_holds_wh
     start_ms: typing.Optional[int], end_ms: typing.Optional[int], times: typing.List[typing.Tuple[int, int]]
 ) -> None:
     pcm = _pcm(2500 * 16 * 2)
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=start_ms, end_ms=end_ms, split="fixed"))
 
@@ -296,7 +287,7 @@ def test_fixed_wav_chunks_are_cut_on_a_grid_from_the_start_and_the_last_holds_wh
 def test_split_other_than_even_or_fixed_is_rejected() -> None:
     with pytest.raises(ValueError, match='split must be "even" or "fixed", got \'equal\''):
         iter_audio_chunks(
-            _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32000)),
+            wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32000)),
             max_chunk_ms=1000,
             split=typing.cast(typing.Any, "equal"),
         )
@@ -305,7 +296,7 @@ def test_split_other_than_even_or_fixed_is_rejected() -> None:
 def test_downmix_strategy_other_than_mix_first_channel_or_none_is_rejected() -> None:
     with pytest.raises(ValueError, match='downmix_strategy must be "mix", "first_channel" or None, got \'average\''):
         iter_audio_chunks(
-            _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32000)),
+            wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32000)),
             max_chunk_ms=1000,
             downmix_strategy=typing.cast(typing.Any, "average"),
         )
@@ -313,7 +304,7 @@ def test_downmix_strategy_other_than_mix_first_channel_or_none_is_rejected() -> 
 
 def test_range_is_split_into_chunks_timed_from_the_start_of_the_recording() -> None:
     pcm = _pcm(5000 * 16 * 2)
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=1500, end_ms=4000))
 
@@ -323,7 +314,7 @@ def test_range_is_split_into_chunks_timed_from_the_start_of_the_recording() -> N
 
 def test_range_cuts_between_samples_round_down_from_the_start_of_the_range() -> None:
     pcm = _pcm(22050 * 2)
-    recording = _wav(sample_rate=22050, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=22050, channels=1, sample_width=2, data=pcm)
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=10, start_ms=5, end_ms=45, downmix_strategy=None))
 
@@ -335,7 +326,7 @@ def test_range_cuts_between_samples_round_down_from_the_start_of_the_range() -> 
 def test_range_may_end_at_the_duration_the_final_chunk_reports() -> None:
     # 1004 samples at 22,050 Hz last 45.533 ms, which the final chunk reports as 46 ms.
     pcm = _pcm(1004 * 2)
-    recording = _wav(sample_rate=22050, channels=1, sample_width=2, data=pcm)
+    recording = wav_file(sample_rate=22050, channels=1, sample_width=2, data=pcm)
     duration_ms = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))[-1].end_ms
 
     chunks = list(
@@ -361,7 +352,7 @@ def test_range_may_end_at_the_duration_the_final_chunk_reports() -> None:
 def test_range_outside_the_recording_is_rejected(
     start_ms: typing.Optional[int], end_ms: typing.Optional[int], message: str
 ) -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2000 * 16 * 2))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2000 * 16 * 2))
 
     with pytest.raises(ValueError, match=message):
         iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=start_ms, end_ms=end_ms)
@@ -369,7 +360,7 @@ def test_range_outside_the_recording_is_rejected(
 
 @pytest.mark.parametrize("name", ["start_ms", "end_ms"])
 def test_range_bound_that_is_not_an_integer_is_rejected(name: str) -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
 
     with pytest.raises(TypeError, match=f"{name} must be an integer, got 0.5"):
         iter_audio_chunks(recording, max_chunk_ms=1000, **{name: typing.cast(typing.Any, 0.5)})
@@ -387,7 +378,7 @@ def test_range_bound_that_is_not_an_integer_is_rejected(name: str) -> None:
 def test_file_given_as_a_tuple_gives_the_same_chunks_as_its_bytes(
     wrap: typing.Callable[[bytes], typing.Any],
 ) -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
 
     chunks = list(iter_audio_chunks(wrap(recording), max_chunk_ms=1000))
 
@@ -395,7 +386,7 @@ def test_file_given_as_a_tuple_gives_the_same_chunks_as_its_bytes(
 
 
 def test_file_object_is_read_from_its_start_and_left_open() -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(2500 * 16 * 2))
     file = io.BytesIO(recording)
     file.seek(100)
 
@@ -406,7 +397,7 @@ def test_file_object_is_read_from_its_start_and_left_open() -> None:
 
 
 def test_file_object_that_cannot_seek_such_as_a_pipe_is_read() -> None:
-    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(100 * 16 * 2))
+    recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(100 * 16 * 2))
     read_fd, write_fd = os.pipe()
 
     def write() -> None:
@@ -434,26 +425,22 @@ def test_unsupported_bytes_are_rejected_without_mentioning_str() -> None:
     assert "str" not in str(error.value)
 
 
-def _format(chunk: bytes) -> typing.Tuple[int, int, int, int]:
-    """The format tag, channels, sample rate and bits of a chunk, whose fmt chunk follows the RIFF header."""
-    tag, channels, sample_rate, _, _, bits = struct.unpack_from("<HHIIHH", chunk, 20)
-    return tag, channels, sample_rate, bits
-
-
 def test_wav_is_mixed_down_to_16_khz_mono_floating_point_by_default_with_the_same_chunk_times() -> None:
-    recording = _wav(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4 * 3))
+    recording = wav_file(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4 * 3))
 
     chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
 
     as_given = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))
     assert [(c.start_ms, c.end_ms) for c in chunks] == [(c.start_ms, c.end_ms) for c in as_given]
-    assert {_format(c.data) for c in chunks} == {(0x0003, 1, 16000, 32)}
+    formats = {(a.sample_rate, a.channels, a.sample_width, a.is_float) for a in map(read_wav, (c.data for c in chunks))}
+    assert formats == {(16000, 1, 4, True)}
     assert sum(len(c.data) for c in chunks) < sum(len(c.data) for c in as_given) / 2
 
 
 def test_first_channel_keeps_one_channel_at_16_khz_as_floating_point() -> None:
-    recording = _wav(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4))
+    recording = wav_file(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4))
 
     (chunk,) = iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy="first_channel")
 
-    assert _format(chunk.data) == (0x0003, 1, 16000, 32)
+    audio = read_wav(chunk.data)
+    assert (audio.sample_rate, audio.channels, audio.sample_width, audio.is_float) == (16000, 1, 4, True)
