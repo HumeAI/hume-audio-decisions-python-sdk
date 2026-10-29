@@ -88,8 +88,8 @@ def test_sends_each_chunk_in_order_and_returns_each_response(create_chunked: _Cr
 
     result = create_chunked(requests, file=audio, chunk_ms=1000)
 
-    chunks = list(iter_audio_chunks(audio, chunk_ms=1000))
-    assert [_parts(request)["file"].get_payload(decode=True) for request in requests] == [c.data for c in chunks]
+    expected = list(iter_audio_chunks(audio, chunk_ms=1000))
+    assert [_parts(request)["file"].get_payload(decode=True) for request in requests] == [c.data for c in expected]
     for request in requests:
         assert json.loads(typing.cast(bytes, _parts(request)["request"].get_payload(decode=True))) == {
             "context": "A test call.",

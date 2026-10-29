@@ -370,7 +370,8 @@ def test_encoder_written_mp3_is_cut_at_the_times_confirmed_by_decoding_its_chunk
     # The files were encoded with ffmpeg's libmp3lame from a tone mixed with noise, at a bitrate low
     # enough that almost every frame stores audio data in earlier frames. Decoding each of these
     # chunks with ffmpeg gives exactly the samples of decoding the whole file, over the chunk's new
-    # frames. That was checked by hand, because CI has no decoder, so the times are pinned here. With fewer frames repeated, the times change and the decoded audio does not match.
+    # frames. That was checked by hand, because CI has no decoder, so the times are pinned here.
+    # With fewer frames repeated, the times change and the decoded audio does not match.
     # Times are measured from where ffmpeg and mpg123 start playing the whole file, which both play
     # for 4000 ms, so a chunk's start plus a time within the decoded chunk gives that sample.
     recording = (_ASSETS / name).read_bytes()
