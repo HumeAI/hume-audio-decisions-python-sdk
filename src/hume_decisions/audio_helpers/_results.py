@@ -76,8 +76,8 @@ class ChunkedDecisionsResult:
     start_ms: int
 
     def __init__(self, chunks: typing.Iterable[ChunkResult], start_ms: typing.Optional[int] = None) -> None:
-        object.__setattr__(self, "chunks", tuple(chunks))
         object.__setattr__(self, "start_ms", 0 if start_ms is None else check_integer("start_ms", start_ms))
+        object.__setattr__(self, "chunks", tuple(chunks))
 
     @property
     def responses(self) -> typing.List[typing.Optional[DecisionsResponse]]:

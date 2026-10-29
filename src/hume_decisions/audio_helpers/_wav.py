@@ -39,7 +39,6 @@ class WavAudio:
 
 
 class _Format(typing.NamedTuple):
-    # The fields come in WavAudio's order, so that a parsed format unpacks into its first fields.
     fmt: bytes
     channels: int
     sample_rate: int
@@ -76,7 +75,15 @@ def parse_wav(data: memoryview) -> WavAudio:
             unclosed = size == 0 and 8 + riff_size <= offset
             # A file cut short is read as far as it goes, up to its last whole sample.
             size = available if unclosed or size == _UNKNOWN_SIZE else min(size, available)
-            return WavAudio(*fmt, data_start=offset, sample_count=size // (fmt.sample_width * fmt.channels))
+            return WavAudio(
+                fmt=fmt.fmt,
+                channels=fmt.channels,
+                sample_rate=fmt.sample_rate,
+                sample_width=fmt.sample_width,
+                is_float=fmt.is_float,
+                data_start=offset,
+                sample_count=size // (fmt.sample_width * fmt.channels),
+            )
         if chunk_id == b"fmt ":
             fmt = _parse_format(bytes(data[offset : offset + min(size, _EXTENSIBLE_FMT_BYTES)]))
         # Chunks with an odd size are followed by a padding byte.
@@ -104,7 +111,15 @@ def wav_chunk(data: memoryview, audio: WavAudio, start: int, end: int) -> bytes:
 def samples_wav(channels: int, sample_rate: int, sample_width: int, is_float: bool, sample_count: int) -> WavAudio:
     """Describes samples that start at offset 0 of their own buffer."""
     fmt = _fmt_body(_IEEE_FLOAT if is_float else _PCM, channels, sample_rate, sample_width, sample_width * 8, b"")
-    return WavAudio(fmt, channels, sample_rate, sample_width, is_float, data_start=0, sample_count=sample_count)
+    return WavAudio(
+        fmt=fmt,
+        channels=channels,
+        sample_rate=sample_rate,
+        sample_width=sample_width,
+        is_float=is_float,
+        data_start=0,
+        sample_count=sample_count,
+    )
 
 
 def _parse_format(body: bytes) -> _Format:
