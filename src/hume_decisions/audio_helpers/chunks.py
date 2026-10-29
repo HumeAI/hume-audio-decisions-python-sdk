@@ -171,7 +171,9 @@ def _wav_chunks(
 ) -> typing.Iterator[AudioChunk]:
     duration_ms = _to_ms(wav.sample_count, wav.sample_rate)
     _check_range(wav.sample_count, duration_ms, start_ms, end_ms)
-    return _iter_wav_chunks(data, wav, chunk_ms, start_ms or 0, duration_ms if end_ms is None else end_ms)
+    # The duration is rounded to the millisecond, so it can fall short of the final sample.
+    last = wav.sample_count if end_ms is None else min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
+    return _iter_wav_chunks(data, wav, chunk_ms, start_ms or 0, last)
 
 
 def _mp3_chunks(
@@ -230,9 +232,8 @@ def _iter_mp3_chunks(
 
 
 def _iter_wav_chunks(
-    data: memoryview, audio: WavAudio, chunk_ms: int, start_ms: int, end_ms: int
+    data: memoryview, audio: WavAudio, chunk_ms: int, start_ms: int, last: int
 ) -> typing.Iterator[AudioChunk]:
-    last = min(_to_sample(end_ms, audio.sample_rate), audio.sample_count)
     index = 0
     start = _to_sample(start_ms, audio.sample_rate)
     while start < last:

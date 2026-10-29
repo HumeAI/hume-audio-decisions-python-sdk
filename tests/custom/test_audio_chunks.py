@@ -92,6 +92,26 @@ def test_cuts_between_samples_round_down_without_drifting() -> None:
     assert b"".join(_read(c.data)[1] for c in chunks) == pcm
 
 
+def test_final_samples_are_kept_when_the_duration_rounds_down() -> None:
+    # 44,122 samples at 44,100 Hz last 1000.499 ms, which rounds down to 1000 ms.
+    pcm = _pcm(44122 * 2)
+    recording = _wav(sample_rate=44100, channels=1, sample_width=2, data=pcm)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert b"".join(_read(c.data)[1] for c in chunks) == pcm
+
+
+def test_recording_shorter_than_half_a_millisecond_gives_one_chunk() -> None:
+    pcm = _pcm(2)
+    recording = _wav(sample_rate=3000, channels=1, sample_width=2, data=pcm)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(0, 0)]
+    assert _read(chunks[0].data)[1] == pcm
+
+
 def test_chunks_hold_only_the_fmt_and_data_chunks() -> None:
     pcm = _pcm(16 * 2 * 30)
     after = b"LIST" + struct.pack("<I", 4) + b"INFO"
