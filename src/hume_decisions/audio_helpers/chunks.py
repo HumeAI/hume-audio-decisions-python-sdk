@@ -115,9 +115,10 @@ def iter_audio_chunks(
 
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
-        most 24,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files
-        of up to 80 kB per second, such as 16 kHz 16-bit stereo. 16-bit stereo needs chunks of at
-        most 136054 ms at 44.1 kHz and 124999 ms at 48 kHz.
+        most 24,000,000 bytes, so that the API accepts it, which 5 minutes of WAV fits only at just
+        under 80,000 bytes per second, such as 16 kHz 16-bit stereo. With "even", a WAV file that
+        does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
+        needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -139,11 +140,12 @@ def iter_audio_chunks(
     Raises
     ------
     ValueError
-        split is not "even" or "fixed", max_chunk_ms is out of range, too long for a WAV chunk to fit the API's size limit, or too
-        short for an MP3 chunk to hold a new frame and the frames it needs, start_ms and end_ms do
-        not select audio within the recording, or the recording is empty or not a file this helper
-        supports, such as a compressed WAV or RF64 file. Any damage to an MP3 file is found before
-        this call returns, so no chunk is produced from a file that cannot be read to the end.
+        split is not "even" or "fixed", max_chunk_ms is out of range, too long with "fixed" for a
+        WAV chunk to fit the API's size limit, or too short for an MP3 chunk to hold a new frame and
+        the frames it needs, start_ms and end_ms do not select audio within the recording, or the
+        recording is empty or not a file this helper supports, such as a compressed WAV or RF64
+        file. Any damage to an MP3 file is found before this call returns, so no chunk is produced
+        from a file that cannot be read to the end.
 
     Examples
     --------
@@ -228,10 +230,10 @@ def _wav_chunks(
         last = wav.sample_count
     else:
         last = min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
-    _check_wav_size(wav, max_chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
     if split == "even":
         cuts = _even_wav_cuts(wav, max_chunk_ms, _to_sample(start_ms, wav.sample_rate), last)
     else:
+        _check_wav_size(wav, max_chunk_ms, last - _to_sample(start_ms, wav.sample_rate))
         cuts = _fixed_wav_cuts(wav, max_chunk_ms, start_ms, last)
     return _plan(
         cuts,
@@ -240,14 +242,18 @@ def _wav_chunks(
     )
 
 
-def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> None:
-    # An MP3 chunk needs no such check: at the highest bitrate, 5 minutes of MP3 is about 12 MB.
+def _wav_samples_that_fit(wav: WavAudio) -> int:
+    # An MP3 chunk needs no such limit: at the highest bitrate, 5 minutes of MP3 is about 12 MB.
     # The header holds the RIFF, fmt and data chunk headers, and the data can need a padding byte.
     header_bytes = 28 + len(wav.fmt) + 1
-    samples = min(-(-max_chunk_ms * wav.sample_rate // 1000), range_samples)
-    if header_bytes + samples * wav.frame_bytes <= MAX_CHUNK_BYTES:
+    return (MAX_CHUNK_BYTES - header_bytes) // wav.frame_bytes
+
+
+def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> None:
+    fitting = _wav_samples_that_fit(wav)
+    if min(-(-max_chunk_ms * wav.sample_rate // 1000), range_samples) <= fitting:
         return
-    fitting_ms = (MAX_CHUNK_BYTES - header_bytes) // wav.frame_bytes * 1000 // wav.sample_rate
+    fitting_ms = fitting * 1000 // wav.sample_rate
     raise ValueError(
         f"max_chunk_ms must be at most {fitting_ms} for this WAV file, so that each chunk stays within the"
         f" {MAX_CHUNK_BYTES} bytes the API accepts along with the request."
@@ -344,7 +350,7 @@ def _fill_mp3_chunks(
 
 def _even_wav_cuts(wav: WavAudio, max_chunk_ms: int, first: int, last: int) -> typing.Iterator[typing.Tuple[int, int]]:
     # When max_chunk_ms is not a whole number of samples, a chunk can be up to one sample longer.
-    most = -(-max_chunk_ms * wav.sample_rate // 1000)
+    most = min(-(-max_chunk_ms * wav.sample_rate // 1000), _wav_samples_that_fit(wav))
     count = -(-(last - first) // most)
     for index in range(count):
         yield first + (last - first) * index // count, first + (last - first) * (index + 1) // count
