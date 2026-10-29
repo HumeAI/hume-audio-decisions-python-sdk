@@ -10,7 +10,7 @@ from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
 from ._downmix import DownmixStrategy
-from .chunks import ChunkSplit, PlannedChunk, _check_integer, plan_audio_chunks
+from .chunks import ChunkSplit, PlannedChunk, _check_integer, plan_audio_chunks, with_content
 
 ChunkStatus = typing.Literal["succeeded", "failed", "not_attempted"]
 
@@ -139,7 +139,7 @@ def _send(
         error: typing.Optional[Exception] = None
         if not stopped:
             try:
-                response = create(_with_content(file, chunk.build()))
+                response = create(with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
         result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
@@ -175,7 +175,7 @@ async def iter_send_chunks_async(
         error: typing.Optional[Exception] = None
         if not stopped:
             try:
-                response = await create(_with_content(file, chunk.build()))
+                response = await create(with_content(file, chunk.build()))
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
         result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
@@ -205,9 +205,3 @@ def _fails_only_this_chunk(error: Exception, after_success: bool) -> bool:
         isinstance(error, ApiError) and isinstance(error.body, Error) and error.body.code == "audio_decode_failed"
     )
     return decode_failed and after_success
-
-
-def _with_content(file: File, data: bytes) -> File:
-    if not isinstance(file, tuple):
-        return data
-    return (file[0], data, *file[2:])

@@ -204,8 +204,7 @@ def plan_audio_chunks(
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
     if split not in ("even", "fixed"):
         raise ValueError(f'split must be "even" or "fixed", got {split!r}.')
-    if downmix_strategy not in ("mix", "first_channel", None):
-        raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {downmix_strategy!r}.')
+    _check_downmix_strategy(downmix_strategy)
     max_chunk_ms = _check_integer("max_chunk_ms", max_chunk_ms)
     if not 1 <= max_chunk_ms <= MAX_CHUNK_MS:
         raise ValueError(f"max_chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {max_chunk_ms}.")
@@ -232,6 +231,41 @@ def plan_audio_chunks(
             " Open the file in binary mode and pass the file object or its bytes."
         )
     raise ValueError(message)
+
+
+def downmix_file(file: File, downmix_strategy: typing.Optional[DownmixStrategy]) -> File:
+    """`file` with a WAV recording mixed down as `downmix_strategy` asks, to send with `create`."""
+    _check_downmix_strategy(downmix_strategy)
+    if downmix_strategy is None:
+        return file
+    data, _ = _read(file)
+    converted = None
+    if is_wav(data):
+        try:
+            wav = parse_wav(data)
+        except ValueError:
+            # A WAV file this parser cannot read may still be one the API can decode, so it is left to the API.
+            pass
+        else:
+            converted = downmix_wav(data, wav, downmix_strategy)
+    if converted is not None:
+        samples, wav = converted
+        return with_content(file, wav_chunk(samples, wav, 0, wav.sample_count))
+    if isinstance(file[1] if isinstance(file, tuple) else file, (str, bytes)):
+        return file
+    # A stream that has been read cannot always be read again, so what was read is sent instead.
+    return with_content(file, bytes(data))
+
+
+def with_content(file: File, data: bytes) -> File:
+    if not isinstance(file, tuple):
+        return data
+    return (file[0], data, *file[2:])
+
+
+def _check_downmix_strategy(downmix_strategy: typing.Optional[DownmixStrategy]) -> None:
+    if downmix_strategy not in ("mix", "first_channel", None):
+        raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {downmix_strategy!r}.')
 
 
 def _read(file: File) -> typing.Tuple[memoryview, bool]:

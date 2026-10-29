@@ -19,6 +19,7 @@ from hume_decisions import (
     DecisionsRequest,
     Question_Noul,
     TooManyRequestsError,
+    core,
 )
 from hume_decisions.audio_helpers import (
     ChunkedDecisionsResult,
@@ -71,6 +72,7 @@ def _rate_limited() -> httpx.Response:
 
 
 _Respond = typing.Callable[[int], httpx.Response]
+_Create = typing.Callable[..., email.message.Message]
 _CreateChunked = typing.Callable[..., ChunkedDecisionsResult]
 _IterCreateChunked = typing.Callable[..., typing.List[typing.Tuple[ChunkResult, int]]]
 
@@ -82,6 +84,25 @@ def _transport(requests: typing.List[httpx.Request], respond: _Respond) -> httpx
         return respond(len(requests))
 
     return httpx.MockTransport(handle)
+
+
+@pytest.fixture(params=["sync", "async"])
+def create(request: pytest.FixtureRequest) -> _Create:
+    """Calls create on the sync or async client, which must behave the same, and returns the file part it uploaded."""
+
+    def call(file: core.File, **kwargs: typing.Any) -> email.message.Message:
+        requests: typing.List[httpx.Request] = []
+        transport = _transport(requests, _succeeded)
+        if request.param == "sync":
+            client = DecisionsClient(api_key="test", httpx_client=httpx.Client(transport=transport))
+            client.decisions.create(request=_REQUEST, file=file, **kwargs)
+        else:
+            async_client = AsyncDecisionsClient(api_key="test", httpx_client=httpx.AsyncClient(transport=transport))
+            asyncio.run(async_client.decisions.create(request=_REQUEST, file=file, **kwargs))
+        (sent,) = requests
+        return _parts(sent)["file"]
+
+    return call
 
 
 @pytest.fixture(params=["sync", "async"])
@@ -161,6 +182,82 @@ def test_sends_the_chunks_iter_audio_chunks_gives_for_the_downmix_strategy(
 
     expected = list(iter_audio_chunks(audio, max_chunk_ms=1000, downmix_strategy=downmix_strategy))
     assert [_parts(request)["file"].get_payload(decode=True) for request in requests] == [c.data for c in expected]
+
+
+@pytest.mark.parametrize("downmix_strategy", ["mix", "first_channel", None])
+def test_create_sends_a_wav_file_mixed_down_as_iter_audio_chunks_mixes_it(
+    create: _Create, downmix_strategy: typing.Optional[DownmixStrategy]
+) -> None:
+    audio = _wav(2500, sample_rate=48000, channels=2)
+
+    sent = create(audio, downmix_strategy=downmix_strategy).get_payload(decode=True)
+
+    (expected,) = iter_audio_chunks(audio, max_chunk_ms=300_000, downmix_strategy=downmix_strategy)
+    assert sent == expected.data
+    assert (sent == audio) == (downmix_strategy is None)
+
+
+def test_create_mixes_down_by_default(create: _Create) -> None:
+    audio = _wav(2500, sample_rate=48000, channels=2)
+
+    (expected,) = iter_audio_chunks(audio, max_chunk_ms=300_000)
+    assert create(audio).get_payload(decode=True) == expected.data
+
+
+def test_create_mixes_down_a_wav_file_given_as_a_file_object_with_its_filename_and_content_type(
+    create: _Create,
+) -> None:
+    audio = _wav(2500, sample_rate=48000, channels=2)
+
+    part = create(("call.wav", io.BytesIO(audio), "audio/wav"))
+
+    (expected,) = iter_audio_chunks(audio, max_chunk_ms=300_000)
+    assert part.get_payload(decode=True) == expected.data
+    assert (part.get_filename(), part.get_content_type()) == ("call.wav", "audio/wav")
+
+
+@pytest.mark.parametrize("name", ["tone_mpeg1_32k.mp3", "tone_mpeg25_8k.mp3"])
+def test_create_sends_an_mp3_file_as_it_is(create: _Create, name: str) -> None:
+    audio = (_ASSETS / name).read_bytes()
+
+    assert create(audio).get_payload(decode=True) == audio
+
+
+def test_create_sends_a_file_object_it_could_not_mix_down_as_it_is_even_when_it_cannot_be_read_again(
+    create: _Create,
+) -> None:
+    audio = (_ASSETS / "tone_mpeg1_32k.mp3").read_bytes()
+    stream = io.BufferedReader(_Unseekable(audio))
+
+    assert create(stream).get_payload(decode=True) == audio
+
+
+def test_create_sends_a_wav_file_it_cannot_read_as_it_is(create: _Create) -> None:
+    # A compressed format tag, which the API may still decode.
+    audio = bytearray(_wav(2500, sample_rate=48000, channels=2))
+    audio[20:22] = (2).to_bytes(2, "little")
+
+    assert create(bytes(audio)).get_payload(decode=True) == audio
+
+
+def test_create_rejects_a_downmix_strategy_other_than_mix_first_channel_or_none() -> None:
+    requests: typing.List[httpx.Request] = []
+    client = DecisionsClient(api_key="test", httpx_client=httpx.Client(transport=_transport(requests, _succeeded)))
+
+    with pytest.raises(ValueError, match="downmix_strategy"):
+        client.decisions.create(request=_REQUEST, file=_wav(100), downmix_strategy=typing.cast(typing.Any, "average"))
+    assert requests == []
+
+
+class _Unseekable(io.RawIOBase):
+    def __init__(self, data: bytes) -> None:
+        self._data = io.BytesIO(data)
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: typing.Any) -> int:
+        return self._data.readinto(buffer)
 
 
 def test_sends_only_the_requested_range(create_chunked: _CreateChunked) -> None:
