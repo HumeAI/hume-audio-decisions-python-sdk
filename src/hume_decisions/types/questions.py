@@ -6,5 +6,5 @@ from .question import Question
 
 Questions = typing.Dict[str, Question]
 """
-The questions to answer. Each key is a question ID you choose, such as `agent_tone`, and can be any non-empty string. The response returns each answer under the same ID.
+The questions to answer, at most 100. Each key is a question ID you choose, such as `agent_tone`, and can be any non-empty string of up to 256 characters. The response returns each answer under the same ID.
 """

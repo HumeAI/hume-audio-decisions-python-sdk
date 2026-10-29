@@ -16,17 +16,15 @@ from ..errors.bad_request_error import BadRequestError
 from ..errors.content_too_large_error import ContentTooLargeError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
-from ..errors.method_not_allowed_error import MethodNotAllowedError
 from ..errors.payment_required_error import PaymentRequiredError
 from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..errors.unauthorized_error import UnauthorizedError
 from ..errors.unsupported_media_type_error import UnsupportedMediaTypeError
-from ..types.authentication_error import AuthenticationError
 from ..types.decisions_request import DecisionsRequest
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
-from ..types.input_tokens_response import InputTokensResponse
+from ..types.gateway_error import GatewayError
 from pydantic import ValidationError
 
 # this is used as the default value for optional parameters
@@ -122,9 +120,9 @@ class RawDecisionsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -142,17 +140,6 @@ class RawDecisionsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,
@@ -188,9 +175,9 @@ class RawDecisionsClient:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -208,161 +195,6 @@ class RawDecisionsClient:
                 )
             if _response.status_code == 503:
                 raise ServiceUnavailableError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def input_tokens(
-        self, *, request: DecisionsRequest, file: core.File, request_options: typing.Optional[RequestOptions] = None
-    ) -> HttpResponse[InputTokensResponse]:
-        """
-        Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
-
-        The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
-
-        Hume counts the input tokens from the audio duration, the context and the questions.
-
-        Parameters
-        ----------
-        request : DecisionsRequest
-
-        file : core.File
-            See core.File for more documentation
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[InputTokensResponse]
-            The number of input tokens the request would be billed for.
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            "v0/decisions/file/input_tokens",
-            method="POST",
-            data={},
-            files={
-                "request": (None, json.dumps(jsonable_encoder(request)), "application/json"),
-                "file": core.with_content_type(file=file, default_content_type="audio/*"),
-            },
-            request_options=request_options,
-            omit=OMIT,
-            force_multipart=True,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    InputTokensResponse,
-                    parse_obj_as(
-                        type_=InputTokensResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return HttpResponse(response=_response, data=_data)
-            if _response.status_code == 400:
-                raise BadRequestError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 401:
-                raise UnauthorizedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        AuthenticationError,
-                        parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 402:
-                raise PaymentRequiredError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 403:
-                raise ForbiddenError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 413:
-                raise ContentTooLargeError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 415:
-                raise UnsupportedMediaTypeError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 500:
-                raise InternalServerError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,
@@ -471,9 +303,9 @@ class AsyncRawDecisionsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -491,17 +323,6 @@ class AsyncRawDecisionsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,
@@ -537,9 +358,9 @@ class AsyncRawDecisionsClient:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -557,161 +378,6 @@ class AsyncRawDecisionsClient:
                 )
             if _response.status_code == 503:
                 raise ServiceUnavailableError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def input_tokens(
-        self, *, request: DecisionsRequest, file: core.File, request_options: typing.Optional[RequestOptions] = None
-    ) -> AsyncHttpResponse[InputTokensResponse]:
-        """
-        Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
-
-        The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
-
-        Hume counts the input tokens from the audio duration, the context and the questions.
-
-        Parameters
-        ----------
-        request : DecisionsRequest
-
-        file : core.File
-            See core.File for more documentation
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[InputTokensResponse]
-            The number of input tokens the request would be billed for.
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            "v0/decisions/file/input_tokens",
-            method="POST",
-            data={},
-            files={
-                "request": (None, json.dumps(jsonable_encoder(request)), "application/json"),
-                "file": core.with_content_type(file=file, default_content_type="audio/*"),
-            },
-            request_options=request_options,
-            omit=OMIT,
-            force_multipart=True,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    InputTokensResponse,
-                    parse_obj_as(
-                        type_=InputTokensResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return AsyncHttpResponse(response=_response, data=_data)
-            if _response.status_code == 400:
-                raise BadRequestError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 401:
-                raise UnauthorizedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        AuthenticationError,
-                        parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 402:
-                raise PaymentRequiredError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 403:
-                raise ForbiddenError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 413:
-                raise ContentTooLargeError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 415:
-                raise UnsupportedMediaTypeError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 500:
-                raise InternalServerError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,

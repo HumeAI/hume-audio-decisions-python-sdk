@@ -138,18 +138,6 @@ for question_id, answer in response.answers.items():
 
 `confidence` measures how much raters would agree, not how certain the model is. A `moment` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
 
-## Counting input tokens
-
-`decisions.input_tokens` takes the same file and request as `decisions.create` and returns the number of input tokens the request would be billed for, without evaluating the audio or recording a run. Hume counts them from the audio duration, the context, and the questions.
-
-```python
-with open("test_call.wav", "rb") as audio:
-    count = client.decisions.input_tokens(file=("test_call.wav", audio, "audio/wav"), request=request)
-print(count.input_tokens)
-```
-
-The request is validated the same way as a decisions request and fails with the same errors.
-
 ## Async client
 
 `AsyncDecisionsClient` has the same interface with `async` methods. Use it to send requests for several recordings concurrently.
@@ -300,7 +288,7 @@ print(run.status, list(run.request.questions))
 
 ## Errors
 
-The client raises `hume_decisions.core.ApiError` when a request fails. `status_code` holds the HTTP status, and `body` holds the error body. For every status except 401, `body` is an `Error` whose `code` says what went wrong and whose `param` points to the field it concerns, when there is one. A 401 carries only a `message`, and a `request_id` when an API key was rejected.
+The client raises `hume_decisions.core.ApiError` when a request fails. `status_code` holds the HTTP status, and `body` holds the error body. When the service answers, `body` is an `Error` whose `code` says what went wrong and whose `param` points to where the error was found, when there is one. Hume's API gateway answers some requests before they reach the service: a 401 for a missing or invalid credential, a 429 for a rate limit, and a 404 for a path or method the API does not serve. Those carry only a `message`, and a `request_id` when an API key was rejected.
 
 ```python
 from hume_decisions.core import ApiError
