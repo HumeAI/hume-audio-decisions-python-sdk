@@ -82,16 +82,18 @@ def iter_audio_chunks(
     where the format allows:
 
     - A WAV file is cut between samples. With "fixed", a cut can fall up to one sample before
-      `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that grid. Each chunk is a new WAV file with the recording's sample
-      format and only its audio; other chunks in the file, such as metadata, are left out.
+      `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that grid. Each chunk
+      is a new WAV file with the recording's sample format and only its audio; other chunks in the
+      file, such as metadata, are left out.
     - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
       chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
-      than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can store part of its audio data in the frames before it, and its sound
-      continues from the frame before, so each chunk also starts with the frames its first new
-      frame needs to decode exactly. That is usually a few frames, and up to about 2 seconds at the
-      lowest bitrates. Those frames count toward `max_chunk_ms` and repeat the end of the previous
-      chunk, or start before `start_ms`. Each chunk holds only the recording's frames; tags, and
-      the header frame that states the whole file's length, are left out. When that header frame
+      than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can
+      store part of its audio data in the frames before it, and its sound continues from the frame
+      before, so each chunk also starts with the frames its first new frame needs to decode exactly.
+      That is usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames
+      count toward `max_chunk_ms` and repeat the end of the previous chunk, or start before
+      `start_ms`. Each chunk holds only the recording's frames; tags, and the header frame that
+      states the whole file's length, are left out. When that header frame
       has a LAME tag, as files from LAME and ffmpeg do, it states the silence the encoder added at
       each end, which players skip. Times are then measured from where a player starts the whole
       file, so the first chunk starts before 0, by about 25 ms for a typical 44.1 kHz file, and the
@@ -110,8 +112,8 @@ def iter_audio_chunks(
         The recording, an MP3 or WAV file, in any form `create` accepts. MP3 files of MPEG-1, 2 and
         2.5 layer III are supported, except free format. WAV files of integer PCM (8, 16, 24 or
         32-bit) and floating point (32 or 64-bit) are supported, with either the basic or the
-        extensible WAV header. A file object is read in full from its start and left open. A `str` is the
-        file's contents, not a path.
+        extensible WAV header. A file object is read in full from its start and left open. A `str`
+        is the file's contents, not a path.
 
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
@@ -283,14 +285,16 @@ def _mp3_chunks(
             f"start_ms and end_ms must be at least {frame_ms} ms apart, the length of one frame of this MP3 file."
         )
     # A chunk that could hold only the frames needed before its first new frame would never advance.
+    # Filling fails only when this check does, which also rejects a max_chunk_ms that happens to work
+    # for this range's cuts but not for every frame in it.
     needed_before = max(mp3.frames_needed_before(frame) for frame in range(first, last))
-    if frames_per_chunk <= needed_before:
+    filled = _fill_mp3_chunks(mp3, frames_per_chunk, first, last)
+    if filled is None or frames_per_chunk <= needed_before:
         raise ValueError(
             f"max_chunk_ms must be at least {_frames_ms(mp3, needed_before + 1)} ms for this MP3 file. Its frames"
             f" need up to {needed_before} frames before them to decode, and a chunk must hold those along with"
             " at least one new frame."
         )
-    filled = typing.cast(typing.List[typing.Tuple[int, int]], _fill_mp3_chunks(mp3, frames_per_chunk, first, last))
     return _plan(
         _even_mp3_cuts(mp3, filled, frames_per_chunk, first, last) if split == "even" else filled,
         functools.partial(_mp3_time_ms, mp3),
