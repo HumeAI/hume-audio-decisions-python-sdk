@@ -8,17 +8,15 @@ from importlib import import_module
 if typing.TYPE_CHECKING:
     from .answer import Answer, Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
     from .answers import Answers
-    from .authentication_error import AuthenticationError
     from .choice_answer import ChoiceAnswer
     from .choice_question import ChoiceQuestion
     from .criterion import Criterion
     from .decisions_request import DecisionsRequest
     from .decisions_response import DecisionsResponse
-    from .decisions_upload import DecisionsUpload
     from .error import Error
     from .error_code import ErrorCode
     from .error_type import ErrorType
-    from .input_tokens_response import InputTokensResponse
+    from .gateway_error import GatewayError
     from .moment import Moment
     from .moment_answer import MomentAnswer
     from .moment_question import MomentQuestion
@@ -40,17 +38,15 @@ _dynamic_imports: typing.Dict[str, str] = {
     "Answer_Noul": ".answer",
     "Answer_Score": ".answer",
     "Answers": ".answers",
-    "AuthenticationError": ".authentication_error",
     "ChoiceAnswer": ".choice_answer",
     "ChoiceQuestion": ".choice_question",
     "Criterion": ".criterion",
     "DecisionsRequest": ".decisions_request",
     "DecisionsResponse": ".decisions_response",
-    "DecisionsUpload": ".decisions_upload",
     "Error": ".error",
     "ErrorCode": ".error_code",
     "ErrorType": ".error_type",
-    "InputTokensResponse": ".input_tokens_response",
+    "GatewayError": ".gateway_error",
     "Moment": ".moment",
     "MomentAnswer": ".moment_answer",
     "MomentQuestion": ".moment_question",
@@ -100,17 +96,15 @@ __all__ = [
     "Answer_Noul",
     "Answer_Score",
     "Answers",
-    "AuthenticationError",
     "ChoiceAnswer",
     "ChoiceQuestion",
     "Criterion",
     "DecisionsRequest",
     "DecisionsResponse",
-    "DecisionsUpload",
     "Error",
     "ErrorCode",
     "ErrorType",
-    "InputTokensResponse",
+    "GatewayError",
     "Moment",
     "MomentAnswer",
     "MomentQuestion",

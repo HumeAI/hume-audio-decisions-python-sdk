@@ -3,9 +3,9 @@
 import typing
 
 from ..core.api_error import ApiError
-from ..types.error import Error
+from ..types.gateway_error import GatewayError
 
 
 class TooManyRequestsError(ApiError):
-    def __init__(self, body: Error, headers: typing.Optional[typing.Dict[str, str]] = None):
+    def __init__(self, body: GatewayError, headers: typing.Optional[typing.Dict[str, str]] = None):
         super().__init__(status_code=429, headers=headers, body=body)

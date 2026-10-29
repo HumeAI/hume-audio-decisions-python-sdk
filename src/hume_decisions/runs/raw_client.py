@@ -15,13 +15,12 @@ from ..core.request_options import RequestOptions
 from ..errors.bad_request_error import BadRequestError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
-from ..errors.method_not_allowed_error import MethodNotAllowedError
 from ..errors.not_found_error import NotFoundError
 from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..errors.unauthorized_error import UnauthorizedError
-from ..types.authentication_error import AuthenticationError
 from ..types.error import Error
+from ..types.gateway_error import GatewayError
 from ..types.run import Run
 from ..types.run_status import RunStatus
 from ..types.runs_page import RunsPage
@@ -114,9 +113,9 @@ class RawRunsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -132,24 +131,13 @@ class RawRunsClient:
                         ),
                     ),
                 )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -221,9 +209,9 @@ class RawRunsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -250,24 +238,13 @@ class RawRunsClient:
                         ),
                     ),
                 )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -390,9 +367,9 @@ class AsyncRawRunsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -408,24 +385,13 @@ class AsyncRawRunsClient:
                         ),
                     ),
                 )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -499,9 +465,9 @@ class AsyncRawRunsClient:
                 raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        AuthenticationError,
+                        GatewayError,
                         parse_obj_as(
-                            type_=AuthenticationError,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
@@ -528,24 +494,13 @@ class AsyncRawRunsClient:
                         ),
                     ),
                 )
-            if _response.status_code == 405:
-                raise MethodNotAllowedError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        Error,
-                        parse_obj_as(
-                            type_=Error,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
-                        Error,
+                        GatewayError,
                         parse_obj_as(
-                            type_=Error,  # type: ignore
+                            type_=GatewayError,  # type: ignore
                             object_=_response.json(),
                         ),
                     ),
