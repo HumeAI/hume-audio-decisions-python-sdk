@@ -428,3 +428,22 @@ def test_resume_ms_is_the_job_start_when_an_mp3_job_stops_at_its_first_chunk(
     assert stopped.chunks[0].start_ms < resume_ms
     assert stopped.resume_ms == resume_ms
     assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(c.start_ms, c.end_ms) for c in stopped.chunks]
+
+
+class _Index:
+    # Stands in for a NumPy integer, which is an integer through __index__ without subclassing int.
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __index__(self) -> int:
+        return self.value
+
+
+def test_resume_ms_is_an_int_when_start_ms_is_an_integer_that_is_not_an_int(create_chunked: _CreateChunked) -> None:
+    result = create_chunked(
+        [], lambda number: _failed(402, "payment_required"), file=_wav(3000), max_chunk_ms=1000, start_ms=_Index(1500)
+    )
+
+    assert type(result.start_ms) is int
+    assert type(result.resume_ms) is int
+    assert result.resume_ms == 1500
