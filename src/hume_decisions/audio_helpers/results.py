@@ -91,8 +91,9 @@ class ChunkedDecisionsResult:
         """
         Where the chunk before the one that stopped the job ends, or the job's `start_ms` when the
         first chunk stopped it, to pass as `start_ms`, with the same `end_ms`, to a new job that
-        sends the audio of the chunk that stopped the job and the chunks after it again. None when no
-        chunk stopped the job.
+        sends the audio of the chunk that stopped the job and the chunks after it again. Chunks before
+        it that failed because their audio could not be decoded are not sent again. None when no chunk
+        stopped the job.
         """
         any_succeeded = False
         for position, chunk in enumerate(self.chunks):
