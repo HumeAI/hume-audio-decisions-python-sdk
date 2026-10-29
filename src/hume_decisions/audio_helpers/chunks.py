@@ -12,6 +12,10 @@ from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 # The Decisions API accepts audio up to 5 minutes long.
 MAX_CHUNK_MS = 300_000
 
+# The API accepts a request body of up to 64,000,000 bytes, its JSON part and multipart headers
+# included. The rest is left for those, so a chunk this size is accepted with any common request.
+MAX_CHUNK_BYTES = 63_000_000
+
 
 @dataclasses.dataclass(frozen=True)
 class AudioChunk:
@@ -84,7 +88,9 @@ def iter_audio_chunks(
         file's contents, not a path.
 
     chunk_ms : int
-        Duration of each chunk in milliseconds, from 1 to 300000.
+        Duration of each chunk in milliseconds, from 1 to 300000. A WAV chunk must also be at most
+        63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files of
+        up to about 210 kB per second, such as 48 kHz 16-bit stereo.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -102,11 +108,11 @@ def iter_audio_chunks(
     Raises
     ------
     ValueError
-        chunk_ms is out of range or too short for an MP3 chunk to hold a new frame and the frames
-        it needs, start_ms and end_ms do not select audio within the recording, or the recording is
-        empty or not a file this helper supports, such as a compressed WAV or RF64 file. Any damage
-        to an MP3 file is found before this call returns, so no chunk is produced from a file that
-        cannot be read to the end.
+        chunk_ms is out of range, too long for a WAV chunk to fit the API's size limit, or too
+        short for an MP3 chunk to hold a new frame and the frames it needs, start_ms and end_ms do
+        not select audio within the recording, or the recording is empty or not a file this helper
+        supports, such as a compressed WAV or RF64 file. Any damage to an MP3 file is found before
+        this call returns, so no chunk is produced from a file that cannot be read to the end.
 
     Examples
     --------
@@ -173,7 +179,22 @@ def _wav_chunks(
     _check_range(wav.sample_count, duration_ms, start_ms, end_ms)
     # The duration is rounded to the millisecond, so it can fall short of the final sample.
     last = wav.sample_count if end_ms is None else min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
+    _check_wav_size(wav, chunk_ms, last - _to_sample(start_ms or 0, wav.sample_rate))
     return _iter_wav_chunks(data, wav, chunk_ms, start_ms or 0, last)
+
+
+def _check_wav_size(wav: WavAudio, chunk_ms: int, range_samples: int) -> None:
+    # An MP3 chunk needs no such check: at the highest bitrate, 5 minutes of MP3 is about 12 MB.
+    # The header holds the RIFF, fmt and data chunk headers, and the data can need a padding byte.
+    header_bytes = 28 + len(wav.fmt) + 1
+    samples = min(-(-chunk_ms * wav.sample_rate // 1000), range_samples)
+    if header_bytes + samples * wav.frame_bytes <= MAX_CHUNK_BYTES:
+        return
+    fitting_ms = (MAX_CHUNK_BYTES - header_bytes) // wav.frame_bytes * 1000 // wav.sample_rate
+    raise ValueError(
+        f"chunk_ms must be at most {fitting_ms} for this WAV file, so that each chunk stays within the"
+        f" {MAX_CHUNK_BYTES} bytes the API accepts along with the request."
+    )
 
 
 def _mp3_chunks(

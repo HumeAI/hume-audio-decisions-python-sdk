@@ -159,7 +159,9 @@ class DecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         chunk_ms : int
-            Duration of each chunk in milliseconds, from 1 to 300000.
+            Duration of each chunk in milliseconds, from 1 to 300000. A WAV chunk must also be at most
+            63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files of
+            up to about 210 kB per second, such as 48 kHz 16-bit stereo.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -444,7 +446,9 @@ class AsyncDecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         chunk_ms : int
-            Duration of each chunk in milliseconds, from 1 to 300000.
+            Duration of each chunk in milliseconds, from 1 to 300000. A WAV chunk must also be at most
+            63,000,000 bytes, so that the API accepts it, which limits 5-minute chunks to WAV files of
+            up to about 210 kB per second, such as 48 kHz 16-bit stereo.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
