@@ -217,6 +217,8 @@ if result.complete:
 
 To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once each moment's times have its chunk's `start_ms` added, but an MP3 chunk repeats a little audio from the end of the chunk before, so a moment just after a cut can also appear at the end of the previous chunk.
 
+Each chunk is evaluated on its own audio, so an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk on either side. A `moment` question can return it as two shorter moments, as one moment that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. This applies to both formats. The frames an MP3 chunk repeats from the chunk before are there so the chunk can be decoded, so they cannot be relied on to cover an event at a cut.
+
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 
 1. A WAV file is cut between samples.
