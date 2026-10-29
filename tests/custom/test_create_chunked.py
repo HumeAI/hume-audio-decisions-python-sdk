@@ -169,21 +169,25 @@ def test_continues_after_a_chunk_whose_audio_cannot_be_decoded(create_chunked: _
 
 
 @pytest.mark.parametrize(
-    ("status", "code"),
+    "failure",
     [
-        pytest.param(402, "payment_required", id="out of tokens"),
-        pytest.param(400, "question_invalid", id="invalid request"),
-        pytest.param(400, "a_code_added_later", id="unknown code"),
+        pytest.param(lambda: _failed(402, "payment_required"), id="out of tokens"),
+        pytest.param(lambda: _failed(400, "question_invalid"), id="invalid request"),
+        pytest.param(lambda: _failed(400, "a_code_added_later"), id="unknown code"),
+        pytest.param(
+            lambda: httpx.Response(401, json={"message": "Invalid API key", "request_id": "req"}),
+            id="API key rejected by the gateway",
+        ),
     ],
 )
 def test_stops_at_any_other_error_and_records_the_rest_as_not_attempted(
-    create_chunked: _CreateChunked, status: int, code: str
+    create_chunked: _CreateChunked, failure: typing.Callable[[], httpx.Response]
 ) -> None:
     requests: typing.List[httpx.Request] = []
 
     result = create_chunked(
         requests,
-        lambda number: _failed(status, code) if number == 2 else _succeeded(number),
+        lambda number: failure() if number == 2 else _succeeded(number),
         file=_wav(4000),
         chunk_ms=1000,
     )
