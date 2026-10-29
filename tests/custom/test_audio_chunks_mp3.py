@@ -64,6 +64,16 @@ def _vbr_frame(marker: bytes, offset: int, *, mono: bool = False) -> bytes:
     return bytes(frame)
 
 
+def _lame_frame(*, delay: int, padding: int, frames: int) -> bytes:
+    """Builds an Info frame stating the frame count and, in a LAME tag, the samples the encoder added."""
+    frame = bytearray(_vbr_frame(b"Info", 36))
+    # Only the frame count is present, so the LAME tag follows it.
+    frame[40:48] = struct.pack(">II", 1, frames)
+    frame[48:52] = b"LAME"
+    frame[69:72] = bytes([delay >> 4, (delay & 0x0F) << 4 | padding >> 8, padding & 0xFF])
+    return bytes(frame)
+
+
 def test_mp3_is_split_between_frames_into_chunks_no_longer_than_requested() -> None:
     # MPEG-1 frames at 44.1 kHz hold 1152 samples, about 26.12 ms, so 38 fit in a second. Each chunk
     # after the first repeats the frame before its first new frame, whose output is blended into it.
@@ -142,6 +152,48 @@ def test_header_frame_stating_the_whole_files_length_is_left_out(header: bytes) 
 
     assert [c.data for c in chunks] == [b"".join(frames)]
     assert chunks[0].end_ms == 261
+
+
+def test_mp3_times_are_measured_from_where_players_start_when_a_lame_tag_states_the_samples_added() -> None:
+    # Players leave out 576 + 529 samples at the start and 1000 - 529 at the end, so the recording
+    # starts 25.06 ms into the first frame and ends 225.48 ms after that.
+    frames = _frames(10)
+    recording = _lame_frame(delay=576, padding=1000, frames=10) + b"".join(frames)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(-25, 225)]
+    assert chunks[0].data == b"".join(frames)
+
+
+def test_mp3_range_from_0_to_the_duration_keeps_the_frames_holding_the_start_and_end() -> None:
+    frames = _frames(10)
+    recording = _lame_frame(delay=576, padding=1000, frames=10) + b"".join(frames)
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=0, end_ms=225))
+
+    assert [c.data for c in chunks] == [b"".join(frames)]
+
+    with pytest.raises(ValueError, match="end_ms must not exceed the recording's duration of 225 ms"):
+        iter_audio_chunks(recording, chunk_ms=1000, end_ms=226)
+
+
+def test_mp3_range_with_a_lame_tag_starting_where_a_chunk_reported_it_ends_continues_from_that_chunk() -> None:
+    recording = _lame_frame(delay=576, padding=1000, frames=100) + b"".join(_frames(100))
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    rest = list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=chunks[0].end_ms))
+
+    assert rest == [dataclasses.replace(c, index=c.index - 1) for c in chunks[1:]]
+
+
+def test_mp3_cut_off_before_the_samples_added_at_the_end_keeps_its_final_frame_whole() -> None:
+    # The header counts 12 frames, so the samples added at the end were in the 2 that are missing.
+    recording = _lame_frame(delay=576, padding=1000, frames=12) + b"".join(_frames(10))
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(-25, 236)]
 
 
 def test_mp3_cut_off_partway_through_a_frame_is_read_to_the_last_whole_frame() -> None:
@@ -302,12 +354,12 @@ def test_chunk_duration_just_long_enough_for_the_frames_needed_advances_a_frame_
     [
         pytest.param(
             "tone_mpeg1_32k.mp3",
-            [(0, 972), (792, 1764), (1548, 2520), (2304, 3276), (3060, 4032), (3816, 4068)],
+            [(-35, 937), (757, 1729), (1513, 2485), (2269, 3241), (3025, 3997), (3781, 4000)],
             id="MPEG-1",
         ),
         pytest.param(
             "tone_mpeg25_8k.mp3",
-            [(0, 936), (648, 1584), (1296, 2232), (1872, 2808), (2448, 3384), (2952, 3888), (3456, 4176)],
+            [(-138, 798), (510, 1446), (1158, 2094), (1734, 2670), (2310, 3246), (2814, 3750), (3318, 4000)],
             id="MPEG-2.5",
         ),
     ],
@@ -319,6 +371,8 @@ def test_encoded_mp3_chunks_decode_to_the_same_audio_as_the_whole_file(
     # enough that almost every frame stores audio data in earlier frames. Decoding each of these
     # chunks with ffmpeg gives exactly the samples of decoding the whole file, over the chunk's new
     # frames. With fewer frames repeated, the times change and the decoded audio does not match.
+    # Times are measured from where ffmpeg and mpg123 start playing the whole file, which both play
+    # for 4000 ms, so a chunk's start plus a time within the decoded chunk gives that sample.
     recording = (_ASSETS / name).read_bytes()
 
     chunks = list(iter_audio_chunks(recording, chunk_ms=1000))

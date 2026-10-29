@@ -14,6 +14,10 @@ _BITRATES = {
 }
 _LAYER_III = 1
 _MONO = 3
+# Samples a layer III decoder outputs before the first sample the encoder was given.
+_DECODER_DELAY = 529
+# Encoders whose header frame carries a LAME tag, which states the samples added at each end.
+_LAME_TAG_ENCODERS = (b"LAME", b"Lavf", b"Lavc")
 # Tags that some writers append after the last frame. Nothing after one is audio.
 _TRAILING_TAGS = (b"TAG", b"APETAGEX", b"LYRICSBEGIN", b"ID3")
 
@@ -37,6 +41,10 @@ class Mp3Audio(typing.NamedTuple):
     # many bytes of audio data, its own or later frames', it holds itself.
     reservoir_bytes: typing.List[int]
     main_data_bytes: typing.List[int]
+    # Samples decoded from the frames before the recording starts and after it ends, which players
+    # leave out when a LAME tag states them. Both are 0 without one.
+    leading_samples: int
+    trailing_samples: int
 
     @property
     def frame_count(self) -> int:
@@ -70,11 +78,14 @@ def is_mp3(data: memoryview) -> bool:
 def parse_mp3(data: memoryview) -> Mp3Audio:
     offset = _skip_id3v2(data, 0)
     first = _read_header(data, offset)
-    audio = Mp3Audio(first.sample_rate, 1152 if first.version == _MPEG1 else 576, [], [], [])
-    if offset + first.length <= len(data):
-        # The first frame can be a Xing, Info or VBRI header, which holds the length of the whole
-        # file instead of audio. Left in a chunk, it would tell players the chunk is that long.
-        if not _is_vbr_header(data, offset, first):
+    whole = offset + first.length <= len(data)
+    # The first frame can be a Xing, Info or VBRI header, which holds the length of the whole file
+    # instead of audio. Left in a chunk, it would tell players the chunk is that long.
+    vbr_header = whole and _is_vbr_header(data, offset, first)
+    leading, trailing, stated_frames = _read_lame_tag(data, offset, first) if vbr_header else (0, 0, None)
+    audio = Mp3Audio(first.sample_rate, 1152 if first.version == _MPEG1 else 576, [], [], [], leading, trailing)
+    if whole:
+        if not vbr_header:
             _add_frame(data, offset, first, audio)
         offset += first.length
     while offset + 4 <= len(data) and not any(bytes(data[offset : offset + len(tag)]) == tag for tag in _TRAILING_TAGS):
@@ -87,6 +98,10 @@ def parse_mp3(data: memoryview) -> Mp3Audio:
         _add_frame(data, offset, header, audio)
         offset += header.length
     audio.offsets.append(offset)
+    # The samples added at the end close the frames the header counts. A file cut short has lost
+    # them, and players then leave nothing out at the end.
+    if stated_frames != audio.frame_count:
+        return audio._replace(trailing_samples=0)
     return audio
 
 
@@ -151,6 +166,29 @@ def _is_vbr_header(data: memoryview, offset: int, header: _Header) -> bool:
     # Encoders place the Xing tag after the side information as if the frame had no checksum.
     xing = offset + 4 + header.side_info_size
     return bytes(data[xing : xing + 4]) in (b"Xing", b"Info") or bytes(data[offset + 36 : offset + 40]) == b"VBRI"
+
+
+def _read_lame_tag(data: memoryview, offset: int, header: _Header) -> typing.Tuple[int, int, typing.Optional[int]]:
+    """Reads the samples added before and after the recording, and the frame count the header states."""
+    xing = offset + 4 + header.side_info_size
+    if bytes(data[xing : xing + 4]) not in (b"Xing", b"Info"):
+        return 0, 0, None
+    flags = int.from_bytes(data[xing + 4 : xing + 8], "big")
+    position = xing + 8
+    stated_frames = None
+    if flags & 1:
+        stated_frames = int.from_bytes(data[position : position + 4], "big")
+        position += 4
+    # The byte count, table of contents and quality follow when their flags are set.
+    position += (4 if flags & 2 else 0) + (100 if flags & 4 else 0) + (4 if flags & 8 else 0)
+    if position + 24 > offset + header.length or bytes(data[position : position + 4]) not in _LAME_TAG_ENCODERS:
+        return 0, 0, stated_frames
+    # Two 12-bit counts after the encoder's name and other settings: the samples the encoder added
+    # before the recording, and after it. The decoder's own delay precedes both.
+    b0, b1, b2 = data[position + 21 : position + 24]
+    delay = b0 << 4 | b1 >> 4
+    padding = (b1 & 0x0F) << 8 | b2
+    return delay + _DECODER_DELAY, max(0, padding - _DECODER_DELAY), stated_frames
 
 
 def _unsupported(reason: str) -> ValueError:

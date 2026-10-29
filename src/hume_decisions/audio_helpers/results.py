@@ -26,7 +26,7 @@ class ChunkResult:
     start_ms : int
         Where the chunk starts in the recording, in milliseconds. A moment's `audio_start_ms` and
         `audio_end_ms` are measured from the start of the chunk, so add this to place the moment in
-        the recording.
+        the recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
 
     end_ms : int
         Where the chunk ends in the recording, in milliseconds.

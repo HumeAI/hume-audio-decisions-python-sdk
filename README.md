@@ -210,7 +210,7 @@ Every request asks the same questions with the same context, and `request_option
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 
 1. A WAV file is cut between samples.
-2. An MP3 file is cut between frames, which last 24 to 72 ms, so a chunk can be up to one frame shorter than `chunk_ms`. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered.
+2. An MP3 file is cut between frames, which last 24 to 72 ms, so a chunk can be up to one frame shorter than `chunk_ms`. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
 
 Chunks are sent one at a time, in order, and a failed request does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
 

@@ -29,6 +29,7 @@ class AudioChunk:
 
     start_ms : int
         Where the chunk starts in the recording, in milliseconds, rounded to the nearest millisecond.
+        The first chunk of an MP3 file can start a few tens of milliseconds before 0.
 
     end_ms : int
         Where the chunk ends in the recording, in milliseconds, rounded to the nearest millisecond.
@@ -69,7 +70,10 @@ def iter_audio_chunks(
       usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames count
       toward `chunk_ms` and repeat the end of the previous chunk, or start before `start_ms`. Each
       chunk holds only the recording's frames; tags, and the header frame that states the whole
-      file's length, are left out.
+      file's length, are left out. When that header frame has a LAME tag, as files from LAME and
+      ffmpeg do, it states the silence the encoder added at each end, which players skip. Times are
+      then measured from where a player starts the whole file, so the first chunk starts before 0,
+      by about 25 ms for a typical 44.1 kHz file, and the last ends where the player stops.
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
@@ -201,7 +205,8 @@ def _mp3_chunks(
     data: memoryview, mp3: Mp3Audio, chunk_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]
 ) -> typing.Iterator[AudioChunk]:
     frame_samples = mp3.samples_per_frame
-    _check_range(mp3.frame_count, _to_ms(mp3.frame_count * frame_samples, mp3.sample_rate), start_ms, end_ms)
+    duration_ms = _to_ms(_mp3_end_sample(mp3) - mp3.leading_samples, mp3.sample_rate)
+    _check_range(mp3.frame_count, duration_ms, start_ms, end_ms)
     # Rounding down keeps every chunk within chunk_ms, so a chunk_ms of 300000 stays within the
     # API's limit.
     frames_per_chunk = chunk_ms * mp3.sample_rate // (1000 * frame_samples)
@@ -209,10 +214,10 @@ def _mp3_chunks(
     if frames_per_chunk == 0:
         raise ValueError(f"chunk_ms must be at least {frame_ms} ms, the length of one frame of this MP3 file.")
     # Times given by the caller are often ones a chunk reported, which are rounded to the
-    # millisecond, so they move to the nearest frame boundary rather than the one before.
-    first = 0 if start_ms is None else _round_div(start_ms * mp3.sample_rate, 1000 * frame_samples)
-    last = mp3.frame_count if end_ms is None else _round_div(end_ms * mp3.sample_rate, 1000 * frame_samples)
-    last = min(last, mp3.frame_count)
+    # millisecond, so they move to the nearest frame boundary rather than the one before. The start
+    # and end of the recording can fall partway through a frame, so they keep that whole frame.
+    first = 0 if not start_ms else _frame_at(mp3, start_ms)
+    last = mp3.frame_count if end_ms is None or end_ms >= duration_ms else min(_frame_at(mp3, end_ms), mp3.frame_count)
     if last <= first:
         raise ValueError(
             f"start_ms and end_ms must be at least {frame_ms} ms apart, the length of one frame of this MP3 file."
@@ -226,6 +231,14 @@ def _mp3_chunks(
             " at least one new frame."
         )
     return _iter_mp3_chunks(data, mp3, frames_per_chunk, first, last)
+
+
+def _mp3_end_sample(mp3: Mp3Audio) -> int:
+    return mp3.frame_count * mp3.samples_per_frame - mp3.trailing_samples
+
+
+def _frame_at(mp3: Mp3Audio, ms: int) -> int:
+    return _round_div(ms * mp3.sample_rate + 1000 * mp3.leading_samples, 1000 * mp3.samples_per_frame)
 
 
 def _frames_ms(mp3: Mp3Audio, frames: int) -> int:
@@ -242,10 +255,14 @@ def _iter_mp3_chunks(
         # the previous chunk.
         start = new - mp3.frames_needed_before(new)
         end = min(start + frames_per_chunk, last)
+        # Times are measured from where a player starts the recording, after the samples the
+        # encoder and decoder add, so the first chunk can start before 0 ms.
         yield AudioChunk(
             index=index,
-            start_ms=_to_ms(start * mp3.samples_per_frame, mp3.sample_rate),
-            end_ms=_to_ms(end * mp3.samples_per_frame, mp3.sample_rate),
+            start_ms=_to_ms(start * mp3.samples_per_frame - mp3.leading_samples, mp3.sample_rate),
+            end_ms=_to_ms(
+                min(end * mp3.samples_per_frame, _mp3_end_sample(mp3)) - mp3.leading_samples, mp3.sample_rate
+            ),
             data=mp3_chunk(data, mp3, start, end),
         )
         index += 1
