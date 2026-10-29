@@ -85,8 +85,8 @@ def iter_audio_chunks(
 
     - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one sample before
       `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that grid. Each chunk
-      is a new WAV file with the recording's sample format and only its audio; other chunks in the
-      file, such as metadata, are left out.
+      is a new WAV file in the sample format of the mixed-down audio, holding only its audio; other
+      chunks in the file, such as metadata, are left out.
     - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
       chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
       than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can
@@ -125,10 +125,11 @@ def iter_audio_chunks(
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
         most 24,000,000 bytes, so that the API accepts it, which 5 minutes of WAV fits only at just
-        under 80,000 bytes per second. A file mixed down to one channel fits in every sample format
-        but 64-bit floating point. With "even", a WAV file that does not fit is cut into shorter
-        chunks that do. With "fixed", it raises, and 16-bit stereo that is not mixed down needs a
-        `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
+        under 80,000 bytes per second. Mono or stereo mixed down by "mix" fits in every sample
+        format, except mono 64-bit floating point above about 10 kHz. With "even", a WAV file that
+        does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
+        that is not mixed down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at
+        48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.

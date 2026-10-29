@@ -37,7 +37,17 @@ Keep API keys on a server. To use the API from a web page, relay through your se
 
 ## Preparing audio
 
-Each request takes one audio file, MP3 or WAV, up to 5 minutes long. To evaluate several recordings, send one request per file. To evaluate a longer recording, split it into chunks as described in [Long recordings](#long-recordings). The service mixes all channels into one, so to judge one speaker in a call alone, send that speaker's channel as its own file.
+Each request takes one audio file, MP3 or WAV, up to 5 minutes long. To evaluate several recordings, send one request per file. To evaluate a longer recording, split it into chunks as described in [Long recordings](#long-recordings).
+
+The model hears audio at 16 kHz in one channel. The API resamples every file to 16 kHz and mixes its channels into one before the model processes it, so a higher sample rate or a second channel adds nothing the model can hear. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods below. `downmix_strategy` sets how:
+
+1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz with the filter the API uses, and mixes two channels into one the way the API does, so the model hears the same audio, apart from rounding. A mixed file is sent as 32-bit floating point, so loud audio cannot clip. A file with more than two channels is resampled but keeps its channels, because the API weighs them by speaker position.
+2. `"first_channel"` resamples the same way but keeps only the first channel, so the model hears only that channel.
+3. `None` sends the file as it is.
+
+Mono WAV at 16 kHz or below is sent as it is with every strategy. MP3 files are always sent as they are, because they are already compressed, and so is a WAV file the SDK cannot read, such as a compressed WAV, which the API may still decode. `with_raw_response.create` sends every file as it is.
+
+Because the channels are mixed into one, to judge one speaker in a call alone, send that speaker's channel as its own file, or pass `downmix_strategy="first_channel"` for a WAV file that has that speaker on its first channel.
 
 ## Quickstart
 
@@ -165,7 +175,7 @@ asyncio.run(main())
 
 `max_chunk_ms` sets the longest a chunk can be and has no default, because it decides how many requests the job sends. The recording is cut into the fewest chunks that fit, of equal length, so the last chunk is not a short remainder: a 32-minute call at 300000 ms is cut into 7 chunks of about 4 minutes 34 seconds, not 6 of 5 minutes and 1 of 2 minutes. Pass `split="fixed"` when chunks must be the same length in every recording, for example to count per 5 minutes across calls: every chunk is then `max_chunk_ms` long except the last, which holds what remains and is billed for the context and questions like any other. A WAV recording is sent as its duration divided by `max_chunk_ms` requests, rounded up, as long as a chunk that long fits the API's size limit below: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. An MP3 recording can take more requests, because each chunk holds only whole frames and starts with frames repeated from the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated frames, so they can add several. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
 
-1. Use 300000, the longest chunk the API accepts, for the fewest requests. A WAV chunk must also fit the API's limit of 25,000,000 bytes per request, which 5 minutes of WAV fits only at just under 80,000 bytes per second, such as 16 kHz 16-bit stereo. A WAV file that does not fit is cut into shorter chunks that do, so 16-bit stereo at 44.1 kHz is cut into chunks of at most 136054 ms, and at 48 kHz at most 124999 ms. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits before it sends anything.
+1. Use 300000, the longest chunk the API accepts, for the fewest requests. A WAV chunk must also fit the API's limit of 25,000,000 bytes per request, which 5 minutes of WAV fits only at just under 80,000 bytes per second. With the default `downmix_strategy`, 5 minutes of mono or stereo WAV fits in every sample format, except mono 64-bit floating point above about 10 kHz. A WAV file that does not fit is cut into shorter chunks that do, so 16-bit stereo sent with `downmix_strategy=None` is cut into chunks of at most 136054 ms at 44.1 kHz, and at most 124999 ms at 48 kHz. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits before it sends anything.
 2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers at most one minute.
 
 ```python
@@ -221,7 +231,7 @@ Each chunk is evaluated on its own audio, so an event that crosses a cut, such a
 
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 
-1. A WAV file is cut between samples.
+1. A WAV file is cut between samples, after it is mixed down as `downmix_strategy` sets.
 2. An MP3 file is cut between frames, which last 24 to 72 ms, so chunks can differ in length by a frame or more. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
 
 Chunks are sent one at a time, in order, and a request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
@@ -232,9 +242,9 @@ Chunks are sent one at a time, in order, and a request the API rejects, or whose
 
 To resume a job that stopped, call `create_chunked` again with `start_ms` set to `result.resume_ms`, which is where the chunk before the one that stopped the job ends, and with the same `end_ms`. The new job sends the audio of the chunk that stopped the job and the chunks after it, in no more chunks than the stopped job had left. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent. Its first chunk starts where the stopped chunk started, but with the default `split="even"`, the cuts after it are spread over the remaining range and can fall a few MP3 frames or a millisecond of WAV from the stopped job's. `resume_ms` is `None` when no chunk stopped the job. For a WAV file, a chunk's `start_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
 
-The whole recording is read into memory before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and its mixed-down copy adds about 230 MB.
 
-`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way.
+`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, mixing a WAV file down the same way, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way.
 
 `create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it had received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
 
