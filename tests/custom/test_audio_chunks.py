@@ -263,6 +263,34 @@ def test_chunk_duration_that_is_not_an_integer_is_rejected() -> None:
         iter_audio_chunks(recording, max_chunk_ms=typing.cast(typing.Any, 1.5))
 
 
+@pytest.mark.parametrize(
+    ("start_ms", "end_ms", "times"),
+    [
+        (None, None, [(0, 1000), (1000, 2000), (2000, 2500)]),
+        (500, 2500, [(500, 1500), (1500, 2500)]),
+    ],
+)
+def test_fixed_wav_chunks_are_cut_on_a_grid_from_the_start_and_the_last_holds_what_remains(
+    start_ms: typing.Optional[int], end_ms: typing.Optional[int], times: typing.List[typing.Tuple[int, int]]
+) -> None:
+    pcm = _pcm(2500 * 16 * 2)
+    recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)
+
+    chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=start_ms, end_ms=end_ms, split="fixed"))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == times
+    assert b"".join(_read(c.data)[1] for c in chunks) == pcm[times[0][0] * 32 : times[-1][1] * 32]
+
+
+def test_split_other_than_even_or_fixed_is_rejected() -> None:
+    with pytest.raises(ValueError, match='split must be "even" or "fixed", got \'equal\''):
+        iter_audio_chunks(
+            _wav(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32000)),
+            max_chunk_ms=1000,
+            split=typing.cast(typing.Any, "equal"),
+        )
+
+
 def test_range_is_split_into_chunks_timed_from_the_start_of_the_recording() -> None:
     pcm = _pcm(5000 * 16 * 2)
     recording = _wav(sample_rate=16000, channels=1, sample_width=2, data=pcm)

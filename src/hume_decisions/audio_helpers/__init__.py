@@ -4,7 +4,7 @@
 Helpers that split audio longer than the Decisions API accepts into chunks it does accept.
 """
 
-from .chunks import AudioChunk, iter_audio_chunks
+from .chunks import AudioChunk, ChunkSplit, iter_audio_chunks
 from .results import ChunkedDecisionsResult, ChunkResult, ChunkStatus
 
-__all__ = ["AudioChunk", "ChunkResult", "ChunkStatus", "ChunkedDecisionsResult", "iter_audio_chunks"]
+__all__ = ["AudioChunk", "ChunkResult", "ChunkSplit", "ChunkStatus", "ChunkedDecisionsResult", "iter_audio_chunks"]

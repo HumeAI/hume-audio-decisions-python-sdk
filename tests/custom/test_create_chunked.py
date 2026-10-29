@@ -150,6 +150,15 @@ def test_sends_only_the_requested_range(create_chunked: _CreateChunked) -> None:
     assert [(c.start_ms, c.end_ms) for c in result.chunks] == [(1500, 2250), (2250, 3000)]
 
 
+def test_sends_chunks_of_max_chunk_ms_when_split_is_fixed(create_chunked: _CreateChunked) -> None:
+    requests: typing.List[httpx.Request] = []
+
+    result = create_chunked(requests, file=_wav(2500), max_chunk_ms=1000, split="fixed")
+
+    assert len(requests) == 3
+    assert [(c.start_ms, c.end_ms) for c in result.chunks] == [(0, 1000), (1000, 2000), (2000, 2500)]
+
+
 def test_uploads_each_chunk_with_the_filename_and_content_type_given(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
 

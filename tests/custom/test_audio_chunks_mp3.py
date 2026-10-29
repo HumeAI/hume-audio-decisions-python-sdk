@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-from hume_decisions.audio_helpers import iter_audio_chunks
+from hume_decisions.audio_helpers import ChunkSplit, iter_audio_chunks
 
 _MPEG1 = 3
 _MPEG2 = 2
@@ -85,6 +85,15 @@ def test_mp3_is_split_between_frames_into_the_fewest_even_chunks_no_longer_than_
 
     assert [(c.index, c.start_ms, c.end_ms) for c in chunks] == [(0, 0, 888), (1, 862, 1750), (2, 1724, 2612)]
     assert [c.data for c in chunks] == [b"".join(frames[:34]), b"".join(frames[33:67]), b"".join(frames[66:])]
+
+
+def test_fixed_mp3_chunks_hold_as_many_frames_as_fit_and_the_last_holds_what_remains() -> None:
+    frames = _frames(100)
+
+    chunks = list(iter_audio_chunks(b"".join(frames), max_chunk_ms=1000, split="fixed"))
+
+    assert [(c.index, c.start_ms, c.end_ms) for c in chunks] == [(0, 0, 993), (1, 967, 1959), (2, 1933, 2612)]
+    assert [c.data for c in chunks] == [b"".join(frames[:38]), b"".join(frames[37:75]), b"".join(frames[74:])]
 
 
 def test_mp3_chunks_of_the_maximum_duration_stay_within_five_minutes() -> None:
@@ -362,22 +371,36 @@ def test_chunk_duration_just_long_enough_for_the_frames_needed_advances_a_frame_
 
 
 @pytest.mark.parametrize(
-    ("name", "times"),
+    ("name", "split", "times"),
     [
         pytest.param(
             "tone_mpeg1_32k.mp3",
+            "even",
             [(-35, 829), (685, 1549), (1333, 2197), (1981, 2845), (2629, 3493), (3277, 4000)],
-            id="MPEG-1",
+            id="MPEG-1 even",
+        ),
+        pytest.param(
+            "tone_mpeg1_32k.mp3",
+            "fixed",
+            [(-35, 937), (757, 1729), (1513, 2485), (2269, 3241), (3025, 3997), (3781, 4000)],
+            id="MPEG-1 fixed",
         ),
         pytest.param(
             "tone_mpeg25_8k.mp3",
+            "even",
             [(-138, 798), (510, 1446), (1158, 2094), (1734, 2670), (2310, 3246), (2814, 3750), (3318, 4000)],
-            id="MPEG-2.5",
+            id="MPEG-2.5 even",
+        ),
+        pytest.param(
+            "tone_mpeg25_8k.mp3",
+            "fixed",
+            [(-138, 798), (510, 1446), (1158, 2094), (1734, 2670), (2310, 3246), (2814, 3750), (3318, 4000)],
+            id="MPEG-2.5 fixed",
         ),
     ],
 )
 def test_encoder_written_mp3_is_cut_at_the_times_confirmed_by_decoding_its_chunks(
-    name: str, times: typing.List[typing.Tuple[int, int]]
+    name: str, split: ChunkSplit, times: typing.List[typing.Tuple[int, int]]
 ) -> None:
     # The files were encoded with ffmpeg's libmp3lame from a tone mixed with noise, at a bitrate low
     # enough that almost every frame stores audio data in earlier frames. Decoding each of these
@@ -388,7 +411,7 @@ def test_encoder_written_mp3_is_cut_at_the_times_confirmed_by_decoding_its_chunk
     # for 4000 ms, so a chunk's start plus a time within the decoded chunk gives that sample.
     recording = (_ASSETS / name).read_bytes()
 
-    chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
+    chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000, split=split))
 
     assert [(c.start_ms, c.end_ms) for c in chunks] == times
     first_frame = recording.index(chunks[0].data)

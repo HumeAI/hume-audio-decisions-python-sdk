@@ -3,6 +3,7 @@
 import typing
 
 from .. import core
+from ..audio_helpers.chunks import ChunkSplit
 from ..audio_helpers.results import ChunkedDecisionsResult, ChunkResult, iter_send_chunks, iter_send_chunks_async
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
@@ -138,6 +139,7 @@ class DecisionsClient:
         max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
+        split: ChunkSplit = "even",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[ChunkResult]:
         """
@@ -158,14 +160,19 @@ class DecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         max_chunk_ms : int
-            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
-            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
+            The longest a chunk can be, in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and the
+            limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
 
         end_ms : typing.Optional[int]
             Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        split : typing.Literal["even", "fixed"]
+            "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
+            remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
+            billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -210,6 +217,7 @@ class DecisionsClient:
             max_chunk_ms=max_chunk_ms,
             start_ms=start_ms,
             end_ms=end_ms,
+            split=split,
         )
 
     def create_chunked(
@@ -220,6 +228,7 @@ class DecisionsClient:
         max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
+        split: ChunkSplit = "even",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
@@ -242,14 +251,19 @@ class DecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         max_chunk_ms : int
-            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
-            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
+            The longest a chunk can be, in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and the
+            limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
 
         end_ms : typing.Optional[int]
             Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        split : typing.Literal["even", "fixed"]
+            "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
+            remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
+            billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -297,6 +311,7 @@ class DecisionsClient:
                     max_chunk_ms=max_chunk_ms,
                     start_ms=start_ms,
                     end_ms=end_ms,
+                    split=split,
                     request_options=request_options,
                 )
             )
@@ -435,6 +450,7 @@ class AsyncDecisionsClient:
         max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
+        split: ChunkSplit = "even",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[ChunkResult]:
         """
@@ -455,14 +471,19 @@ class AsyncDecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         max_chunk_ms : int
-            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
-            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
+            The longest a chunk can be, in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and the
+            limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
 
         end_ms : typing.Optional[int]
             Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        split : typing.Literal["even", "fixed"]
+            "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
+            remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
+            billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -515,6 +536,7 @@ class AsyncDecisionsClient:
             max_chunk_ms=max_chunk_ms,
             start_ms=start_ms,
             end_ms=end_ms,
+            split=split,
         )
 
     async def create_chunked(
@@ -525,6 +547,7 @@ class AsyncDecisionsClient:
         max_chunk_ms: int,
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
+        split: ChunkSplit = "even",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
@@ -547,14 +570,19 @@ class AsyncDecisionsClient:
             The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
 
         max_chunk_ms : int
-            The longest a chunk can be, in milliseconds. The recording is cut into the fewest chunks that fit, of
-            equal length. `audio_helpers.iter_audio_chunks` gives its range and the limit on the size of a WAV chunk.
+            The longest a chunk can be, in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and the
+            limit on the size of a WAV chunk.
 
         start_ms : typing.Optional[int]
             Where in the recording to start, in milliseconds. Defaults to the start of the recording.
 
         end_ms : typing.Optional[int]
             Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        split : typing.Literal["even", "fixed"]
+            "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
+            remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
+            billed like any other. `audio_helpers.iter_audio_chunks` describes both.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -612,6 +640,7 @@ class AsyncDecisionsClient:
                         max_chunk_ms=max_chunk_ms,
                         start_ms=start_ms,
                         end_ms=end_ms,
+                        split=split,
                         request_options=request_options,
                     )
                 ]

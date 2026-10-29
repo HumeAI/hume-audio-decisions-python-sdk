@@ -9,7 +9,7 @@ from ..core.api_error import ApiError
 from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
-from .chunks import PlannedChunk, plan_audio_chunks
+from .chunks import ChunkSplit, PlannedChunk, plan_audio_chunks
 
 ChunkStatus = typing.Literal["succeeded", "failed", "not_attempted"]
 
@@ -98,10 +98,11 @@ def iter_send_chunks(
     max_chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
+    split: ChunkSplit,
 ) -> typing.Iterator[ChunkResult]:
     # Planning reads and checks the whole file, so a file that cannot be split raises here, when the
     # caller asks for the iterator, rather than when iteration starts.
-    chunks = plan_audio_chunks(file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    chunks = plan_audio_chunks(file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms, split=split)
     return _send(create, file, chunks)
 
 
@@ -133,11 +134,12 @@ async def iter_send_chunks_async(
     max_chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
+    split: ChunkSplit,
 ) -> typing.AsyncIterator[ChunkResult]:
     # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
     # thread to keep the event loop free.
     chunks = await asyncio.to_thread(
-        plan_audio_chunks, file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms
+        plan_audio_chunks, file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms, split=split
     )
     results: typing.List[ChunkResult] = []
     stopped = False
