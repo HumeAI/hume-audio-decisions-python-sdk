@@ -6,6 +6,7 @@ import threading
 import typing
 import wave
 
+import numpy as np
 import pytest
 from _wav_files import wav_file
 
@@ -263,11 +264,12 @@ def test_chunk_duration_longer_than_the_api_accepts_is_allowed_when_the_range_is
     assert [(c.start_ms, c.end_ms) for c in chunks] == [(10_000, 70_000)]
 
 
-def test_chunk_duration_that_is_not_an_integer_is_rejected() -> None:
+@pytest.mark.parametrize("value", [1.5, True, np.True_], ids=repr)
+def test_chunk_duration_that_is_not_an_integer_is_rejected(value: object) -> None:
     recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
 
-    with pytest.raises(TypeError, match="max_chunk_ms must be an integer, got 1.5"):
-        iter_audio_chunks(recording, max_chunk_ms=typing.cast(typing.Any, 1.5))
+    with pytest.raises(TypeError, match=f"max_chunk_ms must be an integer, got {value!r}"):
+        iter_audio_chunks(recording, max_chunk_ms=typing.cast(typing.Any, value))
 
 
 @pytest.mark.parametrize(
@@ -363,12 +365,13 @@ def test_range_outside_the_recording_is_rejected(
         iter_audio_chunks(recording, max_chunk_ms=1000, start_ms=start_ms, end_ms=end_ms)
 
 
+@pytest.mark.parametrize("value", [0.5, True])
 @pytest.mark.parametrize("name", ["start_ms", "end_ms"])
-def test_range_bound_that_is_not_an_integer_is_rejected(name: str) -> None:
+def test_range_bound_that_is_not_an_integer_is_rejected(name: str, value: object) -> None:
     recording = wav_file(sample_rate=16000, channels=1, sample_width=2, data=_pcm(32))
 
-    with pytest.raises(TypeError, match=f"{name} must be an integer, got 0.5"):
-        iter_audio_chunks(recording, max_chunk_ms=1000, **{name: typing.cast(typing.Any, 0.5)})
+    with pytest.raises(TypeError, match=f"{name} must be an integer, got {value!r}"):
+        iter_audio_chunks(recording, max_chunk_ms=1000, **{name: typing.cast(typing.Any, value)})
 
 
 @pytest.mark.parametrize(

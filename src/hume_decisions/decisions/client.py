@@ -183,6 +183,10 @@ class DecisionsClient:
         ValueError
             The recording cannot be split as requested. This is raised by the call itself, before any request is sent.
 
+        TypeError
+            max_chunk_ms, start_ms or end_ms is not an integer, or is a bool. Like ValueError, this is raised before any
+            request is sent.
+
         Examples
         --------
         from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
@@ -283,6 +287,10 @@ class DecisionsClient:
         ------
         ValueError
             The recording cannot be split as requested. This is raised before any request is sent.
+
+        TypeError
+            max_chunk_ms, start_ms or end_ms is not an integer, or is a bool. Like ValueError, this is raised before any
+            request is sent.
 
         Examples
         --------
@@ -499,6 +507,10 @@ class AsyncDecisionsClient:
         ValueError
             The recording cannot be split as requested. This is raised when iteration starts, before any request is sent.
 
+        TypeError
+            max_chunk_ms, start_ms or end_ms is not an integer, or is a bool. Like ValueError, this is raised before any
+            request is sent.
+
         Examples
         --------
         import asyncio
@@ -607,6 +619,10 @@ class AsyncDecisionsClient:
         ------
         ValueError
             The recording cannot be split as requested. This is raised before any request is sent.
+
+        TypeError
+            max_chunk_ms, start_ms or end_ms is not an integer, or is a bool. Like ValueError, this is raised before any
+            request is sent.
 
         Examples
         --------

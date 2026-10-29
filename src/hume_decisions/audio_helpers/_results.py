@@ -92,11 +92,9 @@ class ChunkedDecisionsResult:
     @property
     def resume_ms(self) -> typing.Optional[int]:
         """
-        Where the chunk before the one that stopped the job ends, or the job's `start_ms` when the
-        first chunk stopped it, to pass as `start_ms`, with the same `end_ms`, to a new job that
-        sends the audio of the chunk that stopped the job and the chunks after it again. Chunks before
-        it that failed because their audio could not be decoded are not sent again. None when no chunk
-        stopped the job.
+        The `start_ms` to give a new job, with the same `end_ms`, so that it sends again the audio
+        from the chunk that stopped this job to the end. Earlier chunks that failed because their
+        audio could not be decoded are not sent again. None when no chunk stopped the job.
         """
         rule = _StopRule()
         for position, chunk in enumerate(self.chunks):

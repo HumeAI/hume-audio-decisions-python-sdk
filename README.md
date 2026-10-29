@@ -305,7 +305,10 @@ async def main() -> None:
 
     async def send(chunk):
         async with limit:
-            return await client.decisions.create(file=("chunk.wav", chunk.data, "audio/wav"), request=request)
+            # The chunk is already mixed down, so it is sent as it is.
+            return await client.decisions.create(
+                file=("chunk.wav", chunk.data, "audio/wav"), request=request, downmix_strategy=None
+            )
 
     with open("long_call.wav", "rb") as audio:
         chunks = list(iter_audio_chunks(audio, max_chunk_ms=300_000))

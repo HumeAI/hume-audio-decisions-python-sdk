@@ -14,8 +14,11 @@ from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 # The Decisions API accepts audio up to 5 minutes long.
 MAX_CHUNK_MS = 300_000
 
-# The API accepts a request body of up to 25,000,000 bytes, its JSON part and multipart headers
-# included. The rest is left for those, so a chunk this size is accepted with any common request.
+# The API accepts a request body of up to this many bytes, its JSON part and multipart headers included.
+MAX_REQUEST_BYTES = 25_000_000
+
+# The rest is left for the JSON part and multipart headers, so a chunk this size is accepted with any
+# common request.
 MAX_CHUNK_BYTES = 24_000_000
 
 ChunkSplit = typing.Literal["even", "fixed"]
@@ -80,28 +83,8 @@ def iter_audio_chunks(
       for its context and questions like any other, however short it is. Use it when chunks must be
       the same length across recordings.
 
-    No chunk is empty. Apart from the WAV mixdown `downmix_strategy` asks for, the audio is copied
-    as it is, never decoded or re-encoded, so cuts fall where the format allows:
-
-    - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one
-      sample before `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that
-      grid. Each chunk is a new WAV file in the sample format of the mixed-down audio, holding only
-      its audio; other chunks in the file, such as metadata, are left out.
-    - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
-      chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
-      than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can
-      store part of its audio data in the frames before it, and its sound continues from the frame
-      before, so each chunk also starts with the frames its first new frame needs to decode exactly.
-      That is usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames
-      count toward `max_chunk_ms` and repeat the end of the previous chunk, or start before
-      `start_ms`. Each chunk holds only the recording's frames; tags, and the header frame that
-      states the whole file's length, are left out. When that header frame has a LAME tag, as files
-      from LAME and ffmpeg do, it states the silence the encoder added at each end, which players
-      skip. Times are then measured from where a player starts the whole file, so the first chunk
-      starts before 0, by about 25 ms for a typical 44.1 kHz file, and the last ends where the
-      player stops.
-
-    `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
+    No chunk is empty. Cuts fall where the format allows, as Notes describes, so `start_ms` and
+    `end_ms` on each chunk give where it actually starts and ends.
 
     The model hears audio at 16 kHz in one channel: the API resamples and mixes down every file
     before the model hears it. A WAV file is mixed down the same way before it is cut, by default,
@@ -125,11 +108,11 @@ def iter_audio_chunks(
 
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
-        most 24,000,000 bytes, so that the API accepts it. 5 minutes of WAV fits only at just under
-        80,000 bytes per second, and always fits for mono or stereo under "mix". With "even", a WAV
-        file that does not fit is cut into shorter chunks that do. With "fixed", it raises, and
-        16-bit stereo that is not mixed down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz
-        and 124999 at 48 kHz.
+        most 24,000,000 bytes, which leaves room for the rest of its request within the API's limit
+        of 25,000,000 bytes. 5 minutes of WAV fits only at just under 80,000 bytes per second, and
+        always fits for mono or stereo under "mix". With "even", a WAV file that does not fit is cut
+        into shorter chunks that do. With "fixed", it raises, and 16-bit stereo that is not mixed
+        down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -176,6 +159,32 @@ def iter_audio_chunks(
         this helper supports, such as a compressed WAV or RF64 file. Any damage to an MP3 file is
         found before this call returns, so no chunk is produced from a file that cannot be read to
         the end.
+
+    TypeError
+        max_chunk_ms, start_ms or end_ms is not an integer, or is a bool.
+
+    Notes
+    -----
+    Apart from the WAV mixdown `downmix_strategy` asks for, the audio is copied as it is, never
+    decoded or re-encoded, so cuts fall where the format allows:
+
+    - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one
+      sample before `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that
+      grid. Each chunk is a new WAV file in the sample format of the mixed-down audio, holding only
+      its audio; other chunks in the file, such as metadata, are left out.
+    - An MP3 file is cut between frames, which last 24 to 72 ms depending on the sample rate, so
+      chunks can differ in length by a frame, and a "fixed" chunk can be up to one frame shorter
+      than `max_chunk_ms`. `start_ms` and `end_ms` move to the nearest frame boundary. A frame can
+      store part of its audio data in the frames before it, and its sound continues from the frame
+      before, so each chunk also starts with the frames its first new frame needs to decode exactly.
+      That is usually a few frames, and up to about 2 seconds at the lowest bitrates. Those frames
+      count toward `max_chunk_ms` and repeat the end of the previous chunk, or start before
+      `start_ms`. Each chunk holds only the recording's frames; tags, and the header frame that
+      states the whole file's length, are left out. When that header frame has a LAME tag, as files
+      from LAME and ffmpeg do, it states the silence the encoder added at each end, which players
+      skip. Times are then measured from where a player starts the whole file, so the first chunk
+      starts before 0, by about 25 ms for a typical 44.1 kHz file, and the last ends where the
+      player stops.
 
     Examples
     --------
@@ -282,8 +291,9 @@ def _check_wav_size(wav: WavAudio, max_chunk_ms: int, range_samples: int) -> Non
         return
     fitting_ms = fitting * 1000 // wav.sample_rate
     raise ValueError(
-        f"max_chunk_ms must be at most {fitting_ms} for this WAV file, so that each chunk stays within the"
-        f" {MAX_CHUNK_BYTES} bytes the API accepts along with the request."
+        f'max_chunk_ms must be at most {fitting_ms} for this WAV file with split="fixed", so that the request for'
+        f' each chunk fits within the API limit of {MAX_REQUEST_BYTES:,} bytes. split="even" cuts shorter chunks'
+        ' that fit instead, and mono or stereo audio mixed down with downmix_strategy="mix" fits 5-minute chunks.'
     )
 
 
