@@ -102,11 +102,22 @@ def test_final_samples_are_kept_when_the_duration_rounds_down() -> None:
     assert b"".join(_read(c.data)[1] for c in chunks) == pcm
 
 
-def test_recording_shorter_than_half_a_millisecond_gives_one_chunk() -> None:
+def test_final_samples_are_kept_when_end_ms_is_the_duration_the_final_chunk_reports() -> None:
+    pcm = _pcm(44122 * 2)
+    recording = _wav(sample_rate=44100, channels=1, sample_width=2, data=pcm)
+    duration_ms = list(iter_audio_chunks(recording, chunk_ms=1000))[-1].end_ms
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000, end_ms=duration_ms))
+
+    assert b"".join(_read(c.data)[1] for c in chunks) == pcm
+
+
+@pytest.mark.parametrize("start_ms", [None, 0])
+def test_recording_shorter_than_half_a_millisecond_gives_one_chunk(start_ms: typing.Optional[int]) -> None:
     pcm = _pcm(2)
     recording = _wav(sample_rate=3000, channels=1, sample_width=2, data=pcm)
 
-    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000, start_ms=start_ms))
 
     assert [(c.start_ms, c.end_ms) for c in chunks] == [(0, 0)]
     assert _read(chunks[0].data)[1] == pcm

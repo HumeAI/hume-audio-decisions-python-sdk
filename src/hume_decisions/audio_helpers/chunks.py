@@ -170,7 +170,8 @@ def _check_range(count: int, duration_ms: int, start_ms: typing.Optional[int], e
     if count == 0:
         raise ValueError("The audio is empty.")
     # The longest range allowed ends at the duration that the final chunk reports.
-    if start_ms is not None and start_ms >= duration_ms:
+    # A recording shorter than half a millisecond has a duration of 0 ms but still starts at 0.
+    if start_ms and start_ms >= duration_ms:
         raise ValueError(f"start_ms must be less than the recording's duration of {duration_ms} ms, got {start_ms}.")
     if end_ms is not None and end_ms > duration_ms:
         raise ValueError(f"end_ms must not exceed the recording's duration of {duration_ms} ms, got {end_ms}.")
@@ -182,7 +183,10 @@ def _wav_chunks(
     duration_ms = _to_ms(wav.sample_count, wav.sample_rate)
     _check_range(wav.sample_count, duration_ms, start_ms, end_ms)
     # The duration is rounded to the millisecond, so it can fall short of the final sample.
-    last = wav.sample_count if end_ms is None else min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
+    if end_ms is None or end_ms >= duration_ms:
+        last = wav.sample_count
+    else:
+        last = min(_to_sample(end_ms, wav.sample_rate), wav.sample_count)
     _check_wav_size(wav, chunk_ms, last - _to_sample(start_ms or 0, wav.sample_rate))
     return _iter_wav_chunks(data, wav, chunk_ms, start_ms or 0, last)
 
