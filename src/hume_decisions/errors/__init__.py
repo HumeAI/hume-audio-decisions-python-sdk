@@ -10,7 +10,6 @@ if typing.TYPE_CHECKING:
     from .content_too_large_error import ContentTooLargeError
     from .forbidden_error import ForbiddenError
     from .internal_server_error import InternalServerError
-    from .method_not_allowed_error import MethodNotAllowedError
     from .not_found_error import NotFoundError
     from .payment_required_error import PaymentRequiredError
     from .service_unavailable_error import ServiceUnavailableError
@@ -22,7 +21,6 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ContentTooLargeError": ".content_too_large_error",
     "ForbiddenError": ".forbidden_error",
     "InternalServerError": ".internal_server_error",
-    "MethodNotAllowedError": ".method_not_allowed_error",
     "NotFoundError": ".not_found_error",
     "PaymentRequiredError": ".payment_required_error",
     "ServiceUnavailableError": ".service_unavailable_error",
@@ -58,7 +56,6 @@ __all__ = [
     "ContentTooLargeError",
     "ForbiddenError",
     "InternalServerError",
-    "MethodNotAllowedError",
     "NotFoundError",
     "PaymentRequiredError",
     "ServiceUnavailableError",

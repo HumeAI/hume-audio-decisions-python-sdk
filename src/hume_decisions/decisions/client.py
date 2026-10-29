@@ -7,7 +7,6 @@ from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.decisions_request import DecisionsRequest
 from ..types.decisions_response import DecisionsResponse
-from ..types.input_tokens_response import InputTokensResponse
 from .raw_client import AsyncRawDecisionsClient, RawDecisionsClient
 
 # this is used as the default value for optional parameters
@@ -128,84 +127,6 @@ class DecisionsClient:
         )
         """
         _response = self._raw_client.create(request=request, file=file, request_options=request_options)
-        return _response.data
-
-    def input_tokens(
-        self, *, request: DecisionsRequest, file: core.File, request_options: typing.Optional[RequestOptions] = None
-    ) -> InputTokensResponse:
-        """
-        Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
-
-        The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
-
-        Hume counts the input tokens from the audio duration, the context and the questions.
-
-        Parameters
-        ----------
-        request : DecisionsRequest
-
-        file : core.File
-            See core.File for more documentation
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        InputTokensResponse
-            The number of input tokens the request would be billed for.
-
-        Examples
-        --------
-        from hume_decisions import (
-            Criterion,
-            DecisionsClient,
-            DecisionsRequest,
-            Question_Choice,
-            Question_Moment,
-            Question_Noul,
-            Question_Score,
-        )
-
-        client = DecisionsClient(
-            api_key="YOUR_API_KEY",
-        )
-        client.decisions.input_tokens(
-            request=DecisionsRequest(
-                context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
-                questions={
-                    "talks_over_caller": Question_Noul(
-                        instructions="Does the agent talk over the caller?",
-                    ),
-                    "agent_tone": Question_Choice(
-                        instructions="Which best describes the tone of the agent?",
-                        criteria=[
-                            Criterion(
-                                name="warm",
-                                description="Warm and friendly toward the caller",
-                            ),
-                            Criterion(
-                                name="neutral",
-                                description="Polite but impersonal",
-                            ),
-                            Criterion(
-                                name="curt",
-                                description="Short or dismissive with the caller",
-                            ),
-                        ],
-                    ),
-                    "agent_naturalness": Question_Score(
-                        instructions="How natural does the agent sound?",
-                        criteria=["Not at all", "2", "3", "4", "Extremely"],
-                    ),
-                    "agent_glitches": Question_Moment(
-                        instructions="Where does the agent glitch, slur or sound robotic?",
-                    ),
-                },
-            ),
-        )
-        """
-        _response = self._raw_client.input_tokens(request=request, file=file, request_options=request_options)
         return _response.data
 
 
@@ -331,90 +252,4 @@ class AsyncDecisionsClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create(request=request, file=file, request_options=request_options)
-        return _response.data
-
-    async def input_tokens(
-        self, *, request: DecisionsRequest, file: core.File, request_options: typing.Optional[RequestOptions] = None
-    ) -> InputTokensResponse:
-        """
-        Counts the input tokens a decisions request would be billed for, without evaluating the audio or recording a run. Send the same body you would send to `POST /v0/decisions/file`.
-
-        The request is validated the same way as a decisions request, and fails with the same errors. The response has no `run_id`, because no run is recorded.
-
-        Hume counts the input tokens from the audio duration, the context and the questions.
-
-        Parameters
-        ----------
-        request : DecisionsRequest
-
-        file : core.File
-            See core.File for more documentation
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        InputTokensResponse
-            The number of input tokens the request would be billed for.
-
-        Examples
-        --------
-        import asyncio
-
-        from hume_decisions import (
-            AsyncDecisionsClient,
-            Criterion,
-            DecisionsRequest,
-            Question_Choice,
-            Question_Moment,
-            Question_Noul,
-            Question_Score,
-        )
-
-        client = AsyncDecisionsClient(
-            api_key="YOUR_API_KEY",
-        )
-
-
-        async def main() -> None:
-            await client.decisions.input_tokens(
-                request=DecisionsRequest(
-                    context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
-                    questions={
-                        "talks_over_caller": Question_Noul(
-                            instructions="Does the agent talk over the caller?",
-                        ),
-                        "agent_tone": Question_Choice(
-                            instructions="Which best describes the tone of the agent?",
-                            criteria=[
-                                Criterion(
-                                    name="warm",
-                                    description="Warm and friendly toward the caller",
-                                ),
-                                Criterion(
-                                    name="neutral",
-                                    description="Polite but impersonal",
-                                ),
-                                Criterion(
-                                    name="curt",
-                                    description="Short or dismissive with the caller",
-                                ),
-                            ],
-                        ),
-                        "agent_naturalness": Question_Score(
-                            instructions="How natural does the agent sound?",
-                            criteria=["Not at all", "2", "3", "4", "Extremely"],
-                        ),
-                        "agent_glitches": Question_Moment(
-                            instructions="Where does the agent glitch, slur or sound robotic?",
-                        ),
-                    },
-                ),
-            )
-
-
-        asyncio.run(main())
-        """
-        _response = await self._raw_client.input_tokens(request=request, file=file, request_options=request_options)
         return _response.data

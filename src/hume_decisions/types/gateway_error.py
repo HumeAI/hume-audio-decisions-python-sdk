@@ -6,9 +6,9 @@ import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class AuthenticationError(UniversalBaseModel):
+class GatewayError(UniversalBaseModel):
     """
-    The body of a `401` response, sent when the request carried no valid API key or access token. It is answered before the request reaches the service, so it carries neither `type` nor `code`.
+    The body of an error that Hume's API gateway answers before the request reaches the service: a `401` for a missing or invalid credential, a `429` for a rate limit, and a `404` for a path or HTTP method the API does not serve. It carries neither `type` nor `code`.
     """
 
     message: str = pydantic.Field()
@@ -18,7 +18,7 @@ class AuthenticationError(UniversalBaseModel):
 
     request_id: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The ID of the request. Sent only when an API key was rejected.
+    The ID of the request. A `401` carries it only when an API key was rejected, and a `429` never does.
     """
 
     if IS_PYDANTIC_V2:

@@ -10,7 +10,7 @@ from .error_type import ErrorType
 
 class Error(UniversalBaseModel):
     """
-    The body of every error response other than a `401`. The HTTP status says how the request failed and `code` says why.
+    The body of every error response the service answers. The HTTP status says how the request failed and `code` says why.
     """
 
     type: ErrorType = pydantic.Field()
@@ -26,7 +26,7 @@ class Error(UniversalBaseModel):
 
     param: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The request field the error concerns, when there is one: a JSON Pointer (RFC 6901) into the `request` part, or the name of a part or header. Omitted when the error does not concern one field.
+    Where the error was found: a JSON Pointer into the `request` part, or the name of a part or header. For a field that is missing, unknown or of the wrong type, it can name an enclosing object, such as the question, instead of the field. Omitted when the error has no narrower location than the whole request.
     """
 
     request_id: str = pydantic.Field()
