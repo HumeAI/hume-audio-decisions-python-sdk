@@ -12,34 +12,9 @@
 <dl>
 <dd>
 
-Asks questions about one audio file and returns the answers, with the `run_id` of the model run that produced them. Each answer estimates how human raters would respond, so you choose the thresholds for acting on it.
+Asks questions about one audio file and returns an answer to each, with the `run_id` of the model run that produced them. Each answer estimates how human raters would respond, so you choose the thresholds for acting on it.
 
-Ask every question you have about the same audio in one request. All the questions are answered in one model inference, so an answer can change when other questions are added, removed or reordered. To compare answers across recordings, send the same questions in the same order. To evaluate several files, send one request per file.
-
-## What the model reads
-
-For each question, the model reads:
-
-1. The question's `instructions`.
-2. The question's `criteria`: each `choice` option's `name`, with its `description` when it has one; the text of each `score` level; or a `noul` question's `true` and `false` guidance.
-3. The request's `context`.
-4. The audio.
-
-Answers are keyed by question ID, `choice` probabilities by option `name`, and `score` probabilities by level index.
-
-## Choosing a primitive
-
-| To ask | Use | The answer gives |
-|---|---|---|
-| Whether something is true of the audio | `noul` | The share of raters who would answer yes |
-| Which of several options applies | `choice` | The probability of each option, and the most likely one |
-| Where the audio falls on an ordered scale | `score` | The probability of each level, and the probability-weighted mean level |
-| When an event occurs | `moment` | The moments where the event may occur, in milliseconds from the start of the file |
-
-## Using the answers
-
-1. Each probability estimates the share of human raters who would give that answer. A `noul` answer near 0.5 means raters would split on the audio, not that the model is unsure.
-2. `confidence` measures how much raters would agree, not how certain the model is.
+All the questions in a request are answered in one model inference, so an answer can change when other questions are added, removed or reordered. To compare answers across recordings, send the same questions in the same order. To evaluate several files, send one request per file.
 </dd>
 </dl>
 </dd>
