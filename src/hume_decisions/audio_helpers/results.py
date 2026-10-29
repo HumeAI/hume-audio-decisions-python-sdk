@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import typing
 
+import httpx
 from ..core.api_error import ApiError
 from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
@@ -86,7 +87,7 @@ def send_chunks(
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
 ) -> ChunkedDecisionsResult:
-    results = []
+    results: typing.List[ChunkResult] = []
     stopped = False
     # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
     for chunk in plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms):
@@ -96,9 +97,9 @@ def send_chunks(
             data = chunk.build()
             try:
                 response = create(_with_content(file, data))
-            except Exception as raised:
+            except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised)
+                stopped = not _fails_only_this_chunk(raised, results)
         results.append(ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error))
     return ChunkedDecisionsResult(tuple(results))
 
@@ -114,7 +115,7 @@ async def send_chunks_async(
     # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
     # thread to keep the event loop free.
     chunks = await asyncio.to_thread(plan_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
-    results = []
+    results: typing.List[ChunkResult] = []
     stopped = False
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
@@ -123,18 +124,23 @@ async def send_chunks_async(
             data = chunk.build()
             try:
                 response = await create(_with_content(file, data))
-            except Exception as raised:
+            except (ApiError, httpx.HTTPError) as raised:
                 error = raised
-                stopped = not _fails_only_this_chunk(raised)
+                stopped = not _fails_only_this_chunk(raised, results)
         results.append(ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error))
     return ChunkedDecisionsResult(tuple(results))
 
 
-def _fails_only_this_chunk(error: Exception) -> bool:
-    # Any other error, including codes the API adds later, is assumed to fail every remaining chunk
-    # the same way, so sending them would only spend requests. The generated client has already
-    # retried rate limits and server errors before raising.
-    return isinstance(error, ApiError) and isinstance(error.body, Error) and error.body.code == "audio_decode_failed"
+def _fails_only_this_chunk(error: Exception, earlier: typing.Sequence[ChunkResult]) -> bool:
+    # A decode failure can come from one damaged stretch of the recording, but until some chunk has
+    # decoded, the whole file is the likelier cause and every remaining chunk would fail the same way.
+    # Any other error, including codes the API adds later, is assumed to fail every remaining chunk,
+    # so sending them would only spend requests. The generated client has already retried rate limits
+    # and server errors before raising.
+    decode_failed = (
+        isinstance(error, ApiError) and isinstance(error.body, Error) and error.body.code == "audio_decode_failed"
+    )
+    return decode_failed and any(result.response is not None for result in earlier)
 
 
 def _with_content(file: File, data: bytes) -> File:

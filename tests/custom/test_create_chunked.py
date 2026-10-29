@@ -168,6 +168,17 @@ def test_continues_after_a_chunk_whose_audio_cannot_be_decoded(create_chunked: _
     assert not result.complete
 
 
+def test_stops_when_no_chunk_has_decoded_before_a_decode_failure(create_chunked: _CreateChunked) -> None:
+    requests: typing.List[httpx.Request] = []
+
+    result = create_chunked(
+        requests, lambda number: _failed(400, "audio_decode_failed"), file=_wav(3000), chunk_ms=1000
+    )
+
+    assert len(requests) == 1
+    assert [c.status for c in result.chunks] == ["failed", "not_attempted", "not_attempted"]
+
+
 @pytest.mark.parametrize(
     "failure",
     [
@@ -235,6 +246,14 @@ def test_stops_when_the_connection_drops(create_chunked: _CreateChunked) -> None
     assert len(requests) == 2
     assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted"]
     assert isinstance(result.chunks[1].error, httpx.RemoteProtocolError)
+
+
+def test_raises_an_error_that_is_neither_from_the_api_nor_the_connection(create_chunked: _CreateChunked) -> None:
+    def respond(number: int) -> httpx.Response:
+        raise RuntimeError("bug")
+
+    with pytest.raises(RuntimeError, match="bug"):
+        create_chunked([], respond, file=_wav(2000), chunk_ms=1000)
 
 
 def test_retries_a_rate_limited_chunk_before_moving_on(create_chunked: _CreateChunked) -> None:

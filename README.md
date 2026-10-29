@@ -222,9 +222,9 @@ The audio is cut without being decoded or re-encoded, so cuts fall where the for
 1. A WAV file is cut between samples.
 2. An MP3 file is cut between frames, which last 24 to 72 ms, so a chunk can be up to one frame shorter than `chunk_ms`. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
 
-Chunks are sent one at a time, in order, and a failed request does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
+Chunks are sent one at a time, in order, and a request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
 
-1. A chunk whose audio cannot be decoded (`audio_decode_failed`) fails on its own, and the remaining chunks are still sent.
+1. A chunk whose audio cannot be decoded (`audio_decode_failed`) fails on its own, and the remaining chunks are still sent, as long as an earlier chunk succeeded. If no chunk has succeeded yet, the whole file is the likely cause, so the job stops.
 2. Any other error stops the job, such as running out of tokens (402), an invalid request, or a dropped connection. The chunks after it have the status `not_attempted`: no request was sent for them, so they were not billed.
 3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `max_retries` in `request_options` to allow more.
 
