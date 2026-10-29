@@ -4,6 +4,7 @@ import email.parser
 import email.policy
 import io
 import json
+import pathlib
 import random
 import typing
 import wave
@@ -372,6 +373,26 @@ def test_resuming_at_resume_ms_sends_the_chunk_that_stopped_the_job_and_those_af
 
     assert stopped.resume_ms == 1000
     assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(1000, 2000), (2000, 3000), (3000, 4000)]
+    assert resumed.complete
+
+
+def test_resuming_an_mp3_job_at_resume_ms_sends_the_same_chunks_as_the_job_that_stopped(
+    create_chunked: _CreateChunked,
+) -> None:
+    # Each chunk of this file starts with frames repeated from the chunk before it, so resuming where
+    # the stopped chunk starts would send those frames again in a chunk of its own.
+    audio = (pathlib.Path(__file__).parent / "assets" / "tone_mpeg25_8k.mp3").read_bytes()
+    stopped = create_chunked(
+        [],
+        lambda number: _failed(402, "payment_required") if number == 3 else _succeeded(number),
+        file=audio,
+        max_chunk_ms=1000,
+    )
+
+    resumed = create_chunked([], file=audio, max_chunk_ms=1000, start_ms=stopped.resume_ms)
+
+    assert stopped.resume_ms == 1446
+    assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(c.start_ms, c.end_ms) for c in stopped.chunks[2:]]
     assert resumed.complete
 
 

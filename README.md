@@ -228,7 +228,7 @@ Chunks are sent one at a time, in order, and a request the API rejects, or whose
 2. Any other error stops the job, such as running out of tokens (402), an invalid request, or a dropped connection. The chunks after it have the status `not_attempted`: no request was sent for them, so they were not billed.
 3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `max_retries` in `request_options` to allow more.
 
-To resume a job that stopped, call `create_chunked` again with `start_ms` set to `result.resume_ms`, which is where the chunk that stopped the job starts, and with the same `end_ms`. `resume_ms` is `None` when no chunk stopped the job. For a WAV file, a chunk's `start_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
+To resume a job that stopped, call `create_chunked` again with `start_ms` set to `result.resume_ms`, which is where the chunk before the one that stopped the job ends, and with the same `end_ms`. The new job sends the chunk that stopped the job and the chunks after it, cut as the stopped job cut them. `resume_ms` is `None` when no chunk stopped the job. For a WAV file, a chunk's `start_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
 
 The whole recording is read into memory before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
 
