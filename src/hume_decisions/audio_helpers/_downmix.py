@@ -42,21 +42,24 @@ def downmix_wav(
     # leaves out the LFE channel, so they are sent as they are for the API to mix.
     if strategy is None or (strategy == "mix" and wav.channels > 2):
         return data, wav
-    mixes = strategy == "mix" and wav.channels == 2
     sample_rate = min(wav.sample_rate, MODEL_SAMPLE_RATE)
     count = ceil_div(wav.sample_count * sample_rate, wav.sample_rate)
     # The API converts every sample to 32-bit floating point, so writing that loses nothing and cannot
     # clip, but it is larger than some recordings that the API would convert just the same.
     converted = samples_wav(1, sample_rate, 4, True, count)
-    frames = _frames(data, wav)
-    if strategy == "first_channel" and wav.channels > 1:
-        # The API would mix every channel, so the first is taken out even when that is not smaller. A
-        # copy of its samples is exact, and smaller than resampling it at 16 kHz or below.
-        if wav.sample_count * wav.sample_width <= count * converted.frame_bytes:
-            picked = samples_wav(1, wav.sample_rate, wav.sample_width, wav.is_float, wav.sample_count)
-            return memoryview(frames[:, 0].tobytes()), picked
-    elif count * converted.frame_bytes >= wav.sample_count * wav.frame_bytes:
+    unchanged_bytes = wav.sample_count * wav.frame_bytes
+    copy_bytes = wav.sample_count * wav.sample_width
+    converted_bytes = count * converted.frame_bytes
+    # The API would mix every channel, so the first is taken out even when that is not smaller.
+    picks_channel = strategy == "first_channel" and wav.channels > 1
+    if not picks_channel and converted_bytes >= unchanged_bytes:
         return data, wav
+    frames = _frames(data, wav)
+    # A copy of the channel's samples is exact, so it is preferred whenever it is no larger.
+    if picks_channel and copy_bytes <= converted_bytes:
+        picked = samples_wav(1, wav.sample_rate, wav.sample_width, wav.is_float, wav.sample_count)
+        return memoryview(frames[:, 0].tobytes()), picked
+    mixes = strategy == "mix" and wav.channels == 2
 
     def read(start: int, stop: int) -> _Samples:
         if mixes:
@@ -64,22 +67,23 @@ def downmix_wav(
             return _decode(frames[start:stop], wav).sum(axis=1, keepdims=True) * math.sqrt(0.5)
         return _decode(frames[start:stop, :1], wav)
 
-    blocks: typing.Iterator[typing.Tuple[int, _Samples]]
+    blocks: typing.Iterator[_Samples]
     if sample_rate == wav.sample_rate:
-        blocks = ((start, read(start, min(start + _BLOCK, count))) for start in range(0, count, _BLOCK))
+        blocks = (read(start, min(start + _BLOCK, count)) for start in range(0, count, _BLOCK))
     else:
         blocks = _resample(read, wav.sample_count, wav.sample_rate, sample_rate, count)
-    out = bytearray(count * converted.frame_bytes)
-    for start, samples in blocks:
+    out = bytearray(converted_bytes)
+    offset = 0
+    for samples in blocks:
         encoded = _encode(samples, wav)
-        offset = start * converted.frame_bytes
         out[offset : offset + len(encoded)] = encoded
+        offset += len(encoded)
     return memoryview(out), converted
 
 
 def _resample(
     read: typing.Callable[[int, int], _Samples], length: int, from_rate: int, to_rate: int, count: int
-) -> typing.Iterator[typing.Tuple[int, _Samples]]:
+) -> typing.Iterator[_Samples]:
     divisor = math.gcd(from_rate, to_rate)
     up, down = to_rate // divisor, from_rate // divisor
     factor = to_rate * _CUTOFF / from_rate
@@ -101,7 +105,7 @@ def _resample(
         low = int(positions.min())
         segment = read(low, int(positions.max()) + 1)[positions - low]
         windows = np.lib.stride_tricks.sliding_window_view(segment, taps, axis=0)
-        yield start, np.einsum("kct,kt->kc", windows[first - first[0]], bank[phase])
+        yield np.einsum("kct,kt->kc", windows[first - first[0]], bank[phase])
 
 
 def _filter_bank(phases: int, factor: float, taps: int) -> _Samples:

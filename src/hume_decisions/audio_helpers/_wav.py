@@ -1,5 +1,6 @@
 # Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
+import dataclasses
 import struct
 import typing
 
@@ -19,16 +20,29 @@ _EXTENSIBLE_FMT_BYTES = 40
 MIN_SAMPLE_RATE = 1000
 
 
-class WavAudio(typing.NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class WavAudio:
     # The fmt chunk body written into every chunk.
     fmt: bytes
+    channels: int
     sample_rate: int
-    # Bytes in one sample of every channel.
-    frame_bytes: int
+    # Bytes in one sample of one channel.
+    sample_width: int
+    is_float: bool
     data_start: int
     sample_count: int
+
+    @property
+    def frame_bytes(self) -> int:
+        """Bytes in one sample of every channel."""
+        return self.sample_width * self.channels
+
+
+class _Format(typing.NamedTuple):
+    # The fields come in WavAudio's order, so that a parsed format unpacks into its first fields.
+    fmt: bytes
     channels: int
-    # Bytes in one sample of one channel.
+    sample_rate: int
     sample_width: int
     is_float: bool
 
@@ -44,7 +58,7 @@ def parse_wav(data: memoryview) -> WavAudio:
         raise _unsupported("no RIFF WAVE header")
     riff_size = struct.unpack_from("<I", data, 4)[0]
     offset = 12
-    fmt: typing.Optional[WavAudio] = None
+    fmt: typing.Optional[_Format] = None
     while True:
         if offset + 8 > len(data):
             raise _unsupported("no data chunk")
@@ -62,7 +76,7 @@ def parse_wav(data: memoryview) -> WavAudio:
             unclosed = size == 0 and 8 + riff_size <= offset
             # A file cut short is read as far as it goes, up to its last whole sample.
             size = available if unclosed or size == _UNKNOWN_SIZE else min(size, available)
-            return fmt._replace(data_start=offset, sample_count=size // fmt.frame_bytes)
+            return WavAudio(*fmt, data_start=offset, sample_count=size // (fmt.sample_width * fmt.channels))
         if chunk_id == b"fmt ":
             fmt = _parse_format(bytes(data[offset : offset + min(size, _EXTENSIBLE_FMT_BYTES)]))
         # Chunks with an odd size are followed by a padding byte.
@@ -89,12 +103,11 @@ def wav_chunk(data: memoryview, audio: WavAudio, start: int, end: int) -> bytes:
 
 def samples_wav(channels: int, sample_rate: int, sample_width: int, is_float: bool, sample_count: int) -> WavAudio:
     """Describes samples that start at offset 0 of their own buffer."""
-    tag = _IEEE_FLOAT if is_float else _PCM
-    audio = _audio(tag, channels, sample_rate, sample_width, sample_width * 8, b"", is_float)
-    return audio._replace(sample_count=sample_count)
+    fmt = _fmt_body(_IEEE_FLOAT if is_float else _PCM, channels, sample_rate, sample_width, sample_width * 8, b"")
+    return WavAudio(fmt, channels, sample_rate, sample_width, is_float, data_start=0, sample_count=sample_count)
 
 
-def _parse_format(body: bytes) -> WavAudio:
+def _parse_format(body: bytes) -> _Format:
     if len(body) < 16:
         raise _unsupported("the fmt chunk is too short")
     header_tag, channels, sample_rate, _, block_align, bits = struct.unpack("<HHIIHH", body[:16])
@@ -116,18 +129,13 @@ def _parse_format(body: bytes) -> WavAudio:
     if sample_rate < MIN_SAMPLE_RATE:
         raise _unsupported(f"{sample_rate} Hz is below the minimum of {MIN_SAMPLE_RATE} Hz")
     extension = body[16:_EXTENSIBLE_FMT_BYTES] if header_tag == _EXTENSIBLE else b""
-    return _audio(header_tag, channels, sample_rate, sample_width, bits, extension, tag == _IEEE_FLOAT)
+    fmt = _fmt_body(header_tag, channels, sample_rate, sample_width, bits, extension)
+    return _Format(fmt, channels, sample_rate, sample_width, tag == _IEEE_FLOAT)
 
 
-def _audio(
-    header_tag: int,
-    channels: int,
-    sample_rate: int,
-    sample_width: int,
-    bits: int,
-    extension: bytes,
-    is_float: bool,
-) -> WavAudio:
+def _fmt_body(
+    header_tag: int, channels: int, sample_rate: int, sample_width: int, bits: int, extension: bytes
+) -> bytes:
     frame_bytes = sample_width * channels
     fmt = struct.pack("<HHIIHH", header_tag, channels, sample_rate, sample_rate * frame_bytes, frame_bytes, bits)
     if header_tag == _EXTENSIBLE:
@@ -135,7 +143,7 @@ def _audio(
     elif header_tag != _PCM:
         # Formats other than PCM declare the size of their header extension, which is empty here.
         fmt += struct.pack("<H", 0)
-    return WavAudio(fmt, sample_rate, frame_bytes, 0, 0, channels, sample_width, is_float)
+    return fmt
 
 
 def _unsupported(reason: str) -> ValueError:
