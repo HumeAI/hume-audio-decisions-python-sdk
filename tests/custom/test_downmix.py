@@ -16,6 +16,9 @@ _FFMPEG_SCENARIOS = [
     (48000, 2, "mix", False),
     (44100, 2, "mix", False),
     (44100, 1, "mix", False),
+    # Rates whose ratio to 16 kHz needs more filter phases than ffmpeg uses, so it interpolates.
+    (44101, 2, "mix", False),
+    (22051, 2, "mix", False),
     (8000, 2, "mix", False),
     (48000, 2, "first_channel", False),
     (8000, 2, "first_channel", False),

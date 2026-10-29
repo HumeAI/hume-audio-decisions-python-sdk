@@ -18,6 +18,9 @@ MODEL_SAMPLE_RATE = 16000
 _FILTER_SIZE = 32
 _CUTOFF = 0.97
 _KAISER_BETA = 9.0
+# A ratio of rates that would need more phases than this gets this many instead, and an output
+# between two phases is interpolated linearly between them.
+_MAX_PHASES = 1024
 
 # Outputs computed together. Each needs a filter's length of input, so this bounds the memory used.
 _BLOCK = 8192
@@ -84,28 +87,34 @@ def downmix_wav(
 def _resample(
     read: typing.Callable[[int, int], _Samples], length: int, from_rate: int, to_rate: int, count: int
 ) -> typing.Iterator[_Samples]:
-    divisor = math.gcd(from_rate, to_rate)
-    up, down = to_rate // divisor, from_rate // divisor
+    phases = min(to_rate // math.gcd(from_rate, to_rate), _MAX_PHASES)
+    interpolates = phases * from_rate % to_rate != 0
     factor = to_rate * _CUTOFF / from_rate
     # ffmpeg rounds the filter length up to an even number.
     taps = math.ceil(_FILTER_SIZE / factor)
     taps += taps % 2
     center = (taps - 1) // 2
-    bank = _filter_bank(up, factor, taps)
+    bank = _filter_bank(phases, factor, taps)
+    if interpolates:
+        bank = np.vstack([bank, _phase_after_last(bank[0])])
     for start in range(0, count, _BLOCK):
         outputs = np.arange(start, min(start + _BLOCK, count))
-        # Output k lies at input position k * down / up, between input `first` and the next one, at
-        # the given phase of the filter bank.
-        first = outputs * down // up
-        phase = outputs * down % up
+        # Output k lies k * from_rate / to_rate inputs in, which is `first` and some phases. With the
+        # ratio's exact phases, every output falls on a phase.
+        steps, remainder = np.divmod(outputs * from_rate * phases, to_rate)
+        first, phase = np.divmod(steps, phases)
         positions = np.arange(first[0] - center, first[-1] - center + taps)
         # ffmpeg reflects the audio at both ends, so the first and last outputs match its own.
         positions = np.abs(positions)
         positions = np.clip(np.where(positions >= length, 2 * length - 1 - positions, positions), 0, length - 1)
         low = int(positions.min())
         segment = read(low, int(positions.max()) + 1)[positions - low]
-        windows = np.lib.stride_tricks.sliding_window_view(segment, taps, axis=0)
-        yield np.einsum("kct,kt->kc", windows[first - first[0]], bank[phase])
+        windows = np.lib.stride_tricks.sliding_window_view(segment, taps, axis=0)[first - first[0]]
+        samples = np.einsum("kct,kt->kc", windows, bank[phase])
+        if interpolates:
+            following = np.einsum("kct,kt->kc", windows, bank[phase + 1])
+            samples += (following - samples) * (remainder / to_rate)[:, None]
+        yield samples
 
 
 def _filter_bank(phases: int, factor: float, taps: int) -> _Samples:
@@ -117,6 +126,15 @@ def _filter_bank(phases: int, factor: float, taps: int) -> _Samples:
     bank: _Samples = sinc * window
     # Every phase is scaled by the first phase's sum, as swresample does, so a constant level is kept.
     return bank / bank[0].sum()
+
+
+def _phase_after_last(first_phase: _Samples) -> _Samples:
+    # swresample builds the phase that ends an interpolation by moving the first phase one tap later
+    # in its buffer, whose length is padded to a multiple of 8. The tap that falls off the end, zero
+    # unless the filter needs no padding, wraps around to the start.
+    taps = len(first_phase)
+    wrapped = first_phase[-1] if taps % 8 == 0 else 0.0
+    return np.concatenate([[wrapped], first_phase[:-1]])
 
 
 def _frames(data: memoryview, wav: WavAudio) -> npt.NDArray[typing.Any]:

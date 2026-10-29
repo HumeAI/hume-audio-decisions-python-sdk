@@ -18,6 +18,9 @@ _EXTENSIBLE_FMT_BYTES = 40
 
 # Chunks are at least 1 ms long, so at this rate every chunk holds at least one sample.
 MIN_SAMPLE_RATE = 1000
+# The resampling filter grows with the sample rate, so without a limit a few bytes of header could
+# demand gigabytes. No recording format in common use goes above this rate.
+_MAX_SAMPLE_RATE = 768_000
 
 
 @dataclasses.dataclass(frozen=True)
@@ -137,12 +140,15 @@ def _parse_format(body: bytes) -> _Format:
     if sample_width not in _SAMPLE_WIDTHS[tag] or (tag == _IEEE_FLOAT and bits != sample_width * 8):
         raise _unsupported(f"{bits}-bit {'PCM' if tag == _PCM else 'floating point'}")
     # Some writers leave the block size at 0 or 1, so it is recomputed for the chunks. A block larger
-    # than one sample per channel means padded samples, which would be cut in the wrong places.
+    # than one sample per channel means padded samples, which would be cut in the wrong places. The
+    # recomputed block size must fit the header's 16 bits, and the byte rate its 32 bits.
     frame_bytes = sample_width * channels
-    if channels < 1 or block_align > frame_bytes or sample_rate * frame_bytes > 0xFFFFFFFF:
+    if channels < 1 or block_align > frame_bytes or frame_bytes > 0xFFFF or sample_rate * frame_bytes > 0xFFFFFFFF:
         raise _unsupported("the fmt chunk is inconsistent")
     if sample_rate < MIN_SAMPLE_RATE:
         raise _unsupported(f"{sample_rate} Hz is below the minimum of {MIN_SAMPLE_RATE} Hz")
+    if sample_rate > _MAX_SAMPLE_RATE:
+        raise _unsupported(f"{sample_rate} Hz is above the maximum of {_MAX_SAMPLE_RATE} Hz")
     extension = body[16:_EXTENSIBLE_FMT_BYTES] if header_tag == _EXTENSIBLE else b""
     fmt = _fmt_body(header_tag, channels, sample_rate, sample_width, bits, extension)
     return _Format(fmt, channels, sample_rate, sample_width, tag == _IEEE_FLOAT)

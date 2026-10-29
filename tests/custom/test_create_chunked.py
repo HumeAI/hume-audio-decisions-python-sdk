@@ -6,6 +6,7 @@ import io
 import json
 import pathlib
 import random
+import struct
 import typing
 
 import httpx
@@ -227,10 +228,18 @@ def test_create_sends_a_file_object_it_could_not_mix_down_as_it_is_even_when_it_
     assert create(stream).get_payload(decode=True) == audio
 
 
-def test_create_sends_a_wav_file_it_cannot_read_as_it_is(create: _Create) -> None:
-    # A compressed format tag, which the API may still decode.
+@pytest.mark.parametrize(
+    "field, offset, value",
+    [
+        # A compressed format tag, which the API may still decode.
+        pytest.param("<H", 20, 2, id="compressed"),
+        pytest.param("<H", 22, 40000, id="too many channels for the block size"),
+        pytest.param("<I", 24, 768_001, id="sample rate above the maximum"),
+    ],
+)
+def test_create_sends_a_wav_file_it_cannot_read_as_it_is(create: _Create, field: str, offset: int, value: int) -> None:
     audio = bytearray(_wav(2500, sample_rate=48000, channels=2))
-    audio[20:22] = (2).to_bytes(2, "little")
+    struct.pack_into(field, audio, offset, value)
 
     assert create(bytes(audio)).get_payload(decode=True) == audio
 

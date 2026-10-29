@@ -199,7 +199,10 @@ def test_recording_cut_off_partway_through_a_sample_is_read_to_the_last_whole_sa
         (_raw_wav(tag=0x0002, bits=4, data=_pcm(32)), "compressed"),
         (_raw_wav(tag=0x0003, bits=24, data=_pcm(32)), "24-bit floating point"),
         (_raw_wav(sample_rate=999, data=_pcm(32)), "below the minimum"),
+        (_raw_wav(sample_rate=768_001, data=_pcm(32)), "above the maximum"),
         (_raw_wav(data=_pcm(32), block_align=4), "inconsistent"),
+        # The block size would not fit the header's 16 bits.
+        (_raw_wav(channels=40000, data=_pcm(32), block_align=0), "inconsistent"),
         (b"RIFF\x04\x00\x00\x00WAVE", "no data chunk"),
     ],
 )
