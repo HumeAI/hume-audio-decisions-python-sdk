@@ -7,7 +7,7 @@ import typing
 import wave
 
 import pytest
-from _wav_files import read_wav, wav_file
+from _wav_files import wav_file
 
 from hume_decisions.audio_helpers import iter_audio_chunks
 
@@ -253,7 +253,9 @@ def test_even_chunks_too_large_for_the_api_are_cut_into_the_fewest_that_fit() ->
 def test_chunk_duration_longer_than_the_api_accepts_is_allowed_when_the_range_is_shorter() -> None:
     recording = _raw_wav(tag=0x0003, sample_rate=48000, channels=2, bits=32, data=bytes(70 * 384_000))
 
-    chunks = list(iter_audio_chunks(recording, max_chunk_ms=300_000, start_ms=10_000))
+    chunks = list(
+        iter_audio_chunks(recording, max_chunk_ms=300_000, start_ms=10_000, split="fixed", downmix_strategy=None)
+    )
 
     assert [(c.start_ms, c.end_ms) for c in chunks] == [(10_000, 70_000)]
 
@@ -423,24 +425,3 @@ def test_unsupported_bytes_are_rejected_without_mentioning_str() -> None:
         iter_audio_chunks(b"call.wav", max_chunk_ms=1000)
 
     assert "str" not in str(error.value)
-
-
-def test_wav_is_mixed_down_to_16_khz_mono_floating_point_by_default_with_the_same_chunk_times() -> None:
-    recording = wav_file(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4 * 3))
-
-    chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
-
-    as_given = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))
-    assert [(c.start_ms, c.end_ms) for c in chunks] == [(c.start_ms, c.end_ms) for c in as_given]
-    formats = {(a.sample_rate, a.channels, a.sample_width, a.is_float) for a in map(read_wav, (c.data for c in chunks))}
-    assert formats == {(16000, 1, 4, True)}
-    assert sum(len(c.data) for c in chunks) < sum(len(c.data) for c in as_given) / 2
-
-
-def test_first_channel_keeps_one_channel_at_16_khz_as_floating_point() -> None:
-    recording = wav_file(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4))
-
-    (chunk,) = iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy="first_channel")
-
-    audio = read_wav(chunk.data)
-    assert (audio.sample_rate, audio.channels, audio.sample_width, audio.is_float) == (16000, 1, 4, True)

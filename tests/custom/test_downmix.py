@@ -1,3 +1,4 @@
+import pathlib
 import shutil
 import subprocess
 import typing
@@ -8,8 +9,23 @@ from _wav_files import Samples, read_wav, samples_wav
 
 from hume_decisions.audio_helpers import DownmixStrategy, iter_audio_chunks
 
+_ASSETS = pathlib.Path(__file__).parent / "assets"
 _FFMPEG = shutil.which("ffmpeg")
 _FORMATS = [(1, False), (2, False), (3, False), (4, False), (4, True), (8, True)]
+_FFMPEG_SCENARIOS = [
+    (48000, 2, "mix", False),
+    (44100, 2, "mix", False),
+    (44100, 1, "mix", False),
+    (8000, 2, "mix", False),
+    (48000, 2, "first_channel", False),
+    (8000, 2, "first_channel", False),
+    (16000, 2, "first_channel", False),
+    (22050, 2, "first_channel", False),
+    (22050, 6, "mix", False),
+    (48000, 1, "mix", True),
+    (48000, 2, "mix", True),
+    (48000, 2, "first_channel", True),
+]
 
 
 def _downmix(file: bytes, strategy: DownmixStrategy = "mix") -> bytes:
@@ -19,6 +35,28 @@ def _downmix(file: bytes, strategy: DownmixStrategy = "mix") -> bytes:
 
 def _noise(frames: int, channels: int) -> Samples:
     return np.random.default_rng(frames).uniform(-0.5, 0.5, (frames, channels))
+
+
+def test_wav_is_mixed_down_to_16_khz_mono_floating_point_by_default_with_the_same_chunk_times() -> None:
+    recording = samples_wav(_noise(48000 * 3, 2), sample_rate=48000)
+
+    chunks = list(iter_audio_chunks(recording, max_chunk_ms=1000))
+
+    as_given = list(iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None))
+    assert [(c.start_ms, c.end_ms) for c in chunks] == [(c.start_ms, c.end_ms) for c in as_given]
+    formats = {(a.sample_rate, a.channels, a.sample_width, a.is_float) for a in map(read_wav, (c.data for c in chunks))}
+    assert formats == {(16000, 1, 4, True)}
+    assert sum(len(c.data) for c in chunks) < sum(len(c.data) for c in as_given) / 2
+
+
+def test_mp3_is_cut_as_it_is_whatever_the_downmix_strategy() -> None:
+    recording = (_ASSETS / "tone_mpeg1_32k.mp3").read_bytes()
+
+    mixed = list(iter_audio_chunks(recording, max_chunk_ms=1000))
+
+    assert [c.data for c in mixed] == [
+        c.data for c in iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -109,6 +147,12 @@ def test_first_channel_at_16_khz_or_below_keeps_every_sample_of_the_first_channe
     assert np.array_equal(audio.samples, expected)
 
 
+def test_first_channel_keeps_one_channel_at_16_khz_as_floating_point() -> None:
+    audio = read_wav(_downmix(samples_wav(_noise(48000, 2), sample_rate=48000), "first_channel"))
+
+    assert (audio.sample_rate, audio.channels, audio.sample_width, audio.is_float) == (16000, 1, 4, True)
+
+
 def test_first_channel_copies_the_first_channel_above_16_khz_when_that_is_smaller_than_resampling() -> None:
     file = samples_wav(_noise(1000, 2), sample_rate=22050, sample_width=1)
 
@@ -119,23 +163,12 @@ def test_first_channel_copies_the_first_channel_above_16_khz_when_that_is_smalle
 
 
 @pytest.mark.skipif(_FFMPEG is None, reason="ffmpeg is not installed")
-@pytest.mark.parametrize("sample_width, is_float", _FORMATS)
 @pytest.mark.parametrize(
-    "sample_rate, channels, strategy, loud",
-    [
-        (48000, 2, "mix", False),
-        (44100, 2, "mix", False),
-        (44100, 1, "mix", False),
-        (8000, 2, "mix", False),
-        (48000, 2, "first_channel", False),
-        (8000, 2, "first_channel", False),
-        (16000, 2, "first_channel", False),
-        (22050, 2, "first_channel", False),
-        (22050, 6, "mix", False),
-        (48000, 1, "mix", True),
-        (48000, 2, "mix", True),
-        (48000, 2, "first_channel", True),
-    ],
+    "sample_width, is_float, sample_rate, channels, strategy, loud",
+    # Each scenario in 16-bit, and each other sample format in the first scenario. How the samples
+    # are read is the same in every scenario, and the tests above cover it for every format.
+    [(2, False, *scenario) for scenario in _FFMPEG_SCENARIOS]
+    + [(*sample_format, *_FFMPEG_SCENARIOS[0]) for sample_format in _FORMATS if sample_format != (2, False)],
 )
 def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
     sample_width: int, is_float: bool, sample_rate: int, channels: int, strategy: DownmixStrategy, loud: bool

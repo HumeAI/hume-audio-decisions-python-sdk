@@ -418,13 +418,3 @@ def test_encoder_written_mp3_is_cut_at_the_times_confirmed_by_decoding_its_chunk
     assert b"Info" in recording[:first_frame]
     # The file ends with a 128-byte ID3v1 tag.
     assert recording.index(chunks[-1].data) + len(chunks[-1].data) == len(recording) - 128
-
-
-def test_mp3_is_cut_as_it_is_whatever_the_downmix_strategy() -> None:
-    recording = (_ASSETS / "tone_mpeg1_32k.mp3").read_bytes()
-
-    mixed = list(iter_audio_chunks(recording, max_chunk_ms=1000))
-
-    assert [c.data for c in mixed] == [
-        c.data for c in iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy=None)
-    ]
