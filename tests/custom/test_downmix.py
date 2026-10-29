@@ -86,13 +86,21 @@ def _noise(frames: int, channels: int) -> _Samples:
 
 
 @pytest.mark.parametrize("strategy", ["mix", "first_channel"])
-@pytest.mark.parametrize("sample_rate", [8000, 16000])
-def test_mono_audio_at_16_khz_or_below_is_left_unchanged(strategy: DownmixStrategy, sample_rate: int) -> None:
-    assert _downmix(_wav(_noise(1000, 1), sample_rate=sample_rate), strategy) is None
+@pytest.mark.parametrize(
+    "sample_rate, channels, sample_width, is_float",
+    [(16000, 1, 2, False), (16000, 1, 4, True), (22050, 1, 2, False), (8000, 2, 1, False), (16000, 2, 2, False)],
+)
+def test_audio_that_would_not_get_smaller_is_left_unchanged(
+    strategy: DownmixStrategy, sample_rate: int, channels: int, sample_width: int, is_float: bool
+) -> None:
+    file = _wav(_noise(1000, channels), sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
+
+    assert _downmix(file, strategy) is None
 
 
-def test_mixing_more_than_two_channels_at_16_khz_or_below_leaves_the_audio_unchanged() -> None:
-    assert _downmix(_wav(_noise(1000, 6), sample_rate=16000)) is None
+@pytest.mark.parametrize("sample_rate", [16000, 48000])
+def test_mixing_more_than_two_channels_leaves_the_audio_unchanged(sample_rate: int) -> None:
+    assert _downmix(_wav(_noise(1000, 4), sample_rate=sample_rate)) is None
 
 
 def test_audio_above_16_khz_is_resampled_to_16_khz_covering_every_input_sample() -> None:
@@ -106,89 +114,83 @@ def test_audio_above_16_khz_is_resampled_to_16_khz_covering_every_input_sample()
 def test_resampling_keeps_a_constant_level() -> None:
     audio = _read(typing.cast(bytes, _downmix(_wav(np.full((4800, 1), 0.25), sample_rate=48000))))
 
-    assert np.all(audio.samples == 0.25)
+    assert np.allclose(audio.samples, 0.25, rtol=0, atol=1e-7)
 
 
-def test_resampling_clips_integer_samples_instead_of_wrapping_them() -> None:
+def test_resampling_keeps_the_overshoot_of_loud_audio_instead_of_clipping_it() -> None:
     # The filter overshoots the edges of a full-scale square wave.
     square = np.where(np.arange(4800) // 240 % 2 == 0, 1.0, -1.0)[:, None]
 
     audio = _read(typing.cast(bytes, _downmix(_wav(square, sample_rate=48000))))
 
-    assert audio.samples.max() == 32767 / 32768
-    highs = np.arange(len(audio.samples)) // 80 % 2 == 0
-    assert np.all(audio.samples[highs] > 0)
-    assert np.all(audio.samples[~highs] < 0)
+    assert audio.samples.max() > 1
+    assert audio.samples.min() < -1
 
 
 @pytest.mark.parametrize("sample_width, is_float", _FORMATS)
 def test_mixing_two_channels_adds_them_at_minus_3_db_as_32_bit_float(sample_width: int, is_float: bool) -> None:
-    stereo = np.column_stack([np.full(100, 0.5), np.full(100, -0.25)])
+    stereo = np.column_stack([np.full(300, 0.5), np.full(300, -0.25)])
 
     audio = _read(
-        typing.cast(bytes, _downmix(_wav(stereo, sample_rate=16000, sample_width=sample_width, is_float=is_float)))
+        typing.cast(bytes, _downmix(_wav(stereo, sample_rate=48000, sample_width=sample_width, is_float=is_float)))
     )
 
-    assert (audio.sample_width, audio.is_float, audio.samples.shape) == (4, True, (100, 1))
-    assert np.allclose(audio.samples, 0.25 * np.sqrt(0.5), atol=1e-7)
+    assert (audio.sample_rate, audio.sample_width, audio.is_float, audio.samples.shape) == (16000, 4, True, (100, 1))
+    assert np.allclose(audio.samples, 0.25 * np.sqrt(0.5), rtol=0, atol=1e-7)
 
 
 @pytest.mark.parametrize("sample_width, is_float", _FORMATS)
-def test_first_channel_keeps_the_sample_format_and_every_sample_of_the_first_channel(
+def test_first_channel_keeps_every_sample_of_the_first_channel_as_32_bit_float(
     sample_width: int, is_float: bool
 ) -> None:
-    file = _wav(_noise(1000, 3), sample_rate=8000, sample_width=sample_width, is_float=is_float)
+    file = _wav(_noise(1000, 6), sample_rate=16000, sample_width=sample_width, is_float=is_float)
 
     audio = _read(typing.cast(bytes, _downmix(file, "first_channel")))
 
-    assert (audio.sample_rate, audio.sample_width, audio.is_float) == (8000, sample_width, is_float)
-    assert np.array_equal(audio.samples, _read(file).samples[:, :1])
-
-
-def test_mixing_more_than_two_channels_resamples_each_channel_and_keeps_them_apart() -> None:
-    audio = _read(typing.cast(bytes, _downmix(_wav(_noise(48000, 6), sample_rate=48000))))
-
-    assert (audio.sample_rate, audio.sample_width, audio.samples.shape) == (16000, 2, (16000, 6))
+    assert (audio.sample_rate, audio.sample_width, audio.is_float) == (16000, 4, True)
+    assert np.array_equal(audio.samples, _read(file).samples[:, :1].astype(np.float32))
 
 
 @pytest.mark.skipif(_FFMPEG is None, reason="ffmpeg is not installed")
 @pytest.mark.parametrize("sample_width, is_float", _FORMATS)
 @pytest.mark.parametrize(
-    "sample_rate, channels, strategy",
+    "sample_rate, channels, strategy, loud",
     [
-        (48000, 2, "mix"),
-        (44100, 2, "mix"),
-        (44100, 1, "mix"),
-        (8000, 2, "mix"),
-        (48000, 2, "first_channel"),
-        (22050, 6, "mix"),
+        (48000, 2, "mix", False),
+        (44100, 2, "mix", False),
+        (44100, 1, "mix", False),
+        (8000, 2, "mix", False),
+        (48000, 2, "first_channel", False),
+        (22050, 6, "mix", False),
+        (48000, 1, "mix", True),
+        (48000, 2, "mix", True),
+        (48000, 2, "first_channel", True),
     ],
 )
 def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
-    sample_width: int, is_float: bool, sample_rate: int, channels: int, strategy: DownmixStrategy
+    sample_width: int, is_float: bool, sample_rate: int, channels: int, strategy: DownmixStrategy, loud: bool
 ) -> None:
     frames = sample_rate * 2 + 3
-    tone = 0.3 * np.sin(2 * np.pi * 440 * np.arange(frames) / sample_rate)[:, None] + 0.2 * _noise(frames, channels)
-    file = _wav(tone, sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
+    if loud:
+        # A square wave just below full scale, which the resampling filter overshoots.
+        signal = np.repeat(np.where(np.arange(frames) // 240 % 2 == 0, 0.999, -0.999)[:, None], channels, axis=1)
+    else:
+        signal = 0.3 * np.sin(2 * np.pi * 440 * np.arange(frames) / sample_rate)[:, None] + 0.2 * _noise(
+            frames, channels
+        )
+    file = _wav(signal, sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
 
-    converted = _read(typing.cast(bytes, _downmix(file, strategy)))
+    uploaded = _downmix(file, strategy) or file
 
     # The API converts every file with `ffmpeg -i <file> -f f32le -ac 1 -ar 16000 -`.
     pick = ["-af", "pan=mono|c0=c0"] if strategy == "first_channel" else []
     expected = _ffmpeg(file, *pick, "-ac", "1", "-ar", "16000")
-    heard = _ffmpeg(
-        _wav(converted.samples, sample_rate=converted.sample_rate, is_float=True, sample_width=8),
-        "-ac",
-        "1",
-        "-ar",
-        "16000",
-    )
+    heard = _ffmpeg(uploaded, "-ac", "1", "-ar", "16000")
     # ffmpeg can leave out the last output sample.
     assert len(heard) - len(expected) in (0, 1)
-    # Each integer channel is rounded by up to half its smallest step, and the mix weighs each channel by at most 1.
-    channels = converted.samples.shape[1]
-    rounding = 0.0 if converted.is_float else channels * 0.5 / (1 << (converted.sample_width * 8 - 1))
-    assert np.abs(heard[: len(expected)] - expected).max() <= rounding + 3e-7
+    # Both are rounded to 32-bit floating point, which may differ by a few of its steps at the loudest sample.
+    steps = np.spacing(np.float32(np.abs(expected).max()))
+    assert np.abs(heard[: len(expected)] - expected).max() <= 5 * steps
 
 
 def _ffmpeg(file: bytes, *options: str) -> _Samples:

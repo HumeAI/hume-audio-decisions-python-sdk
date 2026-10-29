@@ -28,18 +28,21 @@ def downmix_wav(
     data: memoryview, wav: WavAudio, strategy: typing.Optional[DownmixStrategy]
 ) -> typing.Tuple[memoryview, WavAudio]:
     """
-    The samples of `wav` resampled to at most MODEL_SAMPLE_RATE and mixed down by `strategy`, with a
-    description of them, or `data` and `wav` themselves when the audio needs no change.
+    The samples of `wav` resampled to at most MODEL_SAMPLE_RATE and mixed down by `strategy` into one
+    channel of 32-bit floating point, with a description of them, or `data` and `wav` themselves when
+    that would not make the audio smaller.
     """
-    if strategy is None:
+    # ffmpeg weighs more than two channels by the speaker positions in the header's channel mask and
+    # leaves out the LFE channel, so they are sent as they are for the API to mix.
+    if strategy is None or (strategy == "mix" and wav.channels > 2):
         return data, wav
     mixes = strategy == "mix" and wav.channels == 2
-    # ffmpeg weighs more than two channels by their speaker positions and leaves out the LFE channel,
-    # so mixing them here would change what the model hears. Resampling each one changes nothing,
-    # because mixing and resampling can be done in either order.
-    channels = wav.channels if strategy == "mix" and wav.channels > 2 else 1
     sample_rate = min(wav.sample_rate, MODEL_SAMPLE_RATE)
-    if channels == wav.channels and sample_rate == wav.sample_rate:
+    count = -(-wav.sample_count * sample_rate // wav.sample_rate)
+    # The API converts every sample to 32-bit floating point, so writing that loses nothing and cannot
+    # clip, but it is larger than some recordings that the API would convert just the same.
+    converted = samples_wav(1, sample_rate, 4, True, count)
+    if count * converted.frame_bytes >= wav.sample_count * wav.frame_bytes:
         return data, wav
     frames = _frames(data, wav)
 
@@ -47,13 +50,8 @@ def downmix_wav(
         if mixes:
             # ffmpeg adds the two channels at -3 dB each when it writes floating point, as the API does.
             return _decode(frames[start:stop], wav).sum(axis=1, keepdims=True) * math.sqrt(0.5)
-        return _decode(frames[start:stop, :channels], wav)
+        return _decode(frames[start:stop, :1], wav)
 
-    count = -(-wav.sample_count * sample_rate // wav.sample_rate)
-    # A mix can exceed the range of an integer format, so it is kept as floating point, which is how
-    # the model receives every sample.
-    sample_width, is_float = (4, True) if mixes else (wav.sample_width, wav.is_float)
-    converted = samples_wav(channels, sample_rate, sample_width, is_float, count)
     blocks: typing.Iterator[typing.Tuple[int, _Samples]]
     if sample_rate == wav.sample_rate:
         blocks = ((start, read(start, min(start + _BLOCK, count))) for start in range(0, count, _BLOCK))
@@ -61,7 +59,7 @@ def downmix_wav(
         blocks = _resample(read, wav.sample_count, wav.sample_rate, sample_rate, count)
     out = bytearray(count * converted.frame_bytes)
     for start, samples in blocks:
-        encoded = _encode(samples, wav, converted)
+        encoded = _encode(samples, wav)
         offset = start * converted.frame_bytes
         out[offset : offset + len(encoded)] = encoded
     return memoryview(out), converted
@@ -124,17 +122,8 @@ def _decode(frames: npt.NDArray[typing.Any], wav: WavAudio) -> _Samples:
     return frames.astype(np.float64)
 
 
-def _encode(samples: _Samples, source: WavAudio, wav: WavAudio) -> bytes:
-    if wav.is_float:
-        if not source.is_float:
-            # Integer samples are scaled to the range -1 to 1, as ffmpeg does.
-            samples = samples / (1 << (source.sample_width * 8 - 1))
-        return samples.astype(f"<f{wav.sample_width}").tobytes()
-    bits = wav.sample_width * 8
-    # Rounded to the nearest integer without dither and clipped, as ffmpeg does by default.
-    values = np.clip(np.rint(samples), -(1 << (bits - 1)), (1 << (bits - 1)) - 1)
-    if wav.sample_width == 1:
-        return (values + 128).astype(np.uint8).tobytes()
-    if wav.sample_width == 3:
-        return values.astype("<i4").view(np.uint8).reshape(*values.shape, 4)[..., :3].tobytes()
-    return values.astype(f"<i{wav.sample_width}").tobytes()
+def _encode(samples: _Samples, source: WavAudio) -> bytes:
+    if not source.is_float:
+        # Integer samples are scaled to the range -1 to 1, as ffmpeg does.
+        samples = samples / (1 << (source.sample_width * 8 - 1))
+    return samples.astype("<f4").tobytes()

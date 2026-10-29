@@ -451,9 +451,9 @@ def test_wav_is_mixed_down_to_16_khz_mono_floating_point_by_default_with_the_sam
     assert sum(len(c.data) for c in chunks) < sum(len(c.data) for c in as_given) / 2
 
 
-def test_first_channel_keeps_the_sample_format() -> None:
+def test_first_channel_keeps_one_channel_at_16_khz_as_floating_point() -> None:
     recording = _wav(sample_rate=48000, channels=2, sample_width=2, data=_pcm(48000 * 4))
 
     (chunk,) = iter_audio_chunks(recording, max_chunk_ms=1000, downmix_strategy="first_channel")
 
-    assert _format(chunk.data) == (0x0001, 1, 16000, 16)
+    assert _format(chunk.data) == (0x0003, 1, 16000, 32)

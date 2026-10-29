@@ -39,13 +39,13 @@ Keep API keys on a server. To use the API from a web page, relay through your se
 
 Each request takes one MP3 or WAV file up to 5 minutes long. Send one request per recording, and split a longer recording as described in [Long recordings](#long-recordings).
 
-The model hears audio at 16 kHz in one channel: the API resamples every file and mixes its channels into one before the model processes it. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods. `downmix_strategy` sets how:
+The model hears audio at 16 kHz in one channel: the API resamples every file and mixes its channels into one before the model processes it. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods, whenever that makes the file smaller. The converted file is 32-bit floating point, the format the API converts every file to, so loud audio is not clipped. `downmix_strategy` sets how:
 
-1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz and mixes two channels into one the way the API does, so the model hears the same audio apart from rounding. The mixed file is sent as 32-bit floating point, so it cannot clip. A file with more than two channels is only resampled, because the API weighs those channels by speaker position.
+1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz and mixes two channels into one the way the API does, so the model hears the same audio apart from rounding. A file with more than two channels is sent as it is, because the API weighs those channels by the speaker positions its header declares.
 2. `"first_channel"` resamples the same way and keeps only the first channel. Use it to judge one speaker of a call who is on the first channel; for any other channel, send that channel as its own file.
 3. `None` sends the file as it is.
 
-MP3 files, mono WAV at 16 kHz or below, and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are, and so is every file sent with `with_raw_response.create`.
+MP3 files, WAV files that conversion would not make smaller, such as 16-bit mono at 16 kHz, and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are, and so is every file sent with `with_raw_response.create`.
 
 ## Quickstart
 
@@ -211,7 +211,7 @@ Each chunk's `start_ms` and `end_ms` give where it starts and ends in the record
 
 By default, the recording is cut into the fewest chunks that fit, of equal length, so the last chunk is not a short remainder: a 32-minute call at 300000 ms becomes 7 chunks of about 4 minutes 34 seconds, not 6 of 5 minutes and 1 of 2 minutes. Pass `split="fixed"` when chunks must be the same length in every recording, for example to count per 5 minutes across calls. Every chunk is then `max_chunk_ms` long except the last, which holds what remains and is billed like any other.
 
-A WAV recording takes its duration divided by `max_chunk_ms` requests, rounded up: a 32-minute call takes 7 at 300000 ms and 32 at 60000 ms. Each chunk must also fit the API's limit of 25,000,000 bytes per request. With the default `downmix_strategy`, 5 minutes of mono or stereo WAV fits in every sample format, except mono 64-bit floating point above about 10 kHz. A file that does not fit is cut into shorter chunks that do, so 16-bit stereo sent with `downmix_strategy=None` is cut into chunks of at most 136054 ms at 44.1 kHz and 124999 ms at 48 kHz. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits, before it sends anything.
+A WAV recording takes its duration divided by `max_chunk_ms` requests, rounded up: a 32-minute call takes 7 at 300000 ms and 32 at 60000 ms. Each chunk must also fit the API's limit of 25,000,000 bytes per request. With the default `downmix_strategy`, 5 minutes of mono or stereo WAV always fits. A file that does not fit is cut into shorter chunks that do, so 16-bit stereo sent with `downmix_strategy=None` is cut into chunks of at most 136054 ms at 44.1 kHz and 124999 ms at 48 kHz. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits, before it sends anything.
 
 An MP3 recording can take more requests, because each chunk repeats a little audio from the chunk before, as described under [Where cuts fall](#where-cuts-fall). At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated audio, so they can add several.
 

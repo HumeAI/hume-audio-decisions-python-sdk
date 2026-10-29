@@ -105,7 +105,8 @@ def iter_audio_chunks(
 
     The model hears audio at 16 kHz in one channel: the API resamples and mixes down every file
     before the model hears it. A WAV file is mixed down the same way before it is cut, by default,
-    so that the chunks are smaller to upload while the model hears the same audio. `downmix_strategy`
+    when that makes it smaller, so that the chunks are smaller to upload while the model hears the
+    same audio. `downmix_strategy`
     describes how. MP3 files are cut as they are, because they are already compressed.
 
     The whole recording is read into memory, mixed down and checked before this function returns,
@@ -124,10 +125,9 @@ def iter_audio_chunks(
 
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
-        most 24,000,000 bytes, so that the API accepts it, which 5 minutes of WAV fits only at just
-        under 80,000 bytes per second. Mono or stereo mixed down by "mix" fits in every sample
-        format, except mono 64-bit floating point above about 10 kHz. With "even", a WAV file that
-        does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
+        most 24,000,000 bytes, so that the API accepts it. 5 minutes of WAV fits only at just under
+        80,000 bytes per second, and always fits for mono or stereo under "mix". With "even", a WAV
+        file that does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
         that is not mixed down needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at
         48 kHz.
 
@@ -144,17 +144,18 @@ def iter_audio_chunks(
 
     downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
         How a WAV file is mixed down before it is cut. Audio above 16 kHz is resampled to 16 kHz with
-        the filter the API uses, and audio at 16 kHz or below keeps its rate.
+        the filter the API uses, and audio at 16 kHz or below keeps its rate. The result is one
+        channel of 32-bit floating point, the format the API converts every file to, so loud audio
+        cannot clip. A file that this would not make smaller, such as 16-bit mono at 16 kHz, is cut
+        as it is.
 
         - "mix", the default, mixes two channels into one the way the API does, adding them at -3 dB
-          each, and stores the result as 32-bit floating point so that loud audio cannot clip. The
-          model hears the same audio as it would from the original file. Audio with more than two
-          channels keeps its channels, because the API weighs them by speaker position.
-        - "first_channel" keeps only the first channel, in the recording's sample format, so the
-          model hears only that channel. Use it when that channel holds the speaker to judge.
+          each, so the model hears the same audio as it would from the original file. Audio with
+          more than two channels is cut as it is, because the API weighs those channels by the
+          speaker positions its header declares.
+        - "first_channel" keeps only the first channel, so the model hears only that channel. Use
+          it when that channel holds the speaker to judge.
         - None cuts the audio as it is.
-
-        Mono audio at 16 kHz or below is never changed.
 
     Returns
     -------
