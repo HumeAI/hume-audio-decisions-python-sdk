@@ -160,15 +160,23 @@ def test_sends_chunks_of_max_chunk_ms_when_split_is_fixed(create_chunked: _Creat
     assert [(c.start_ms, c.end_ms) for c in result.chunks] == [(0, 1000), (1000, 2000), (2000, 2500)]
 
 
-def test_uploads_each_chunk_with_the_filename_and_content_type_given(create_chunked: _CreateChunked) -> None:
+def test_uploads_each_chunk_with_the_filename_content_type_and_headers_given(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
 
-    create_chunked(requests, file=("call.wav", io.BytesIO(_wav(2000)), "audio/wav"), max_chunk_ms=1000)
+    create_chunked(
+        requests,
+        file=("call.wav", io.BytesIO(_wav(2000)), "audio/wav", {"X-Recording-Id": "rec-1"}),
+        max_chunk_ms=1000,
+    )
 
     assert len(requests) == 2
     for request in requests:
         part = _parts(request)["file"]
-        assert (part.get_filename(), part.get_content_type()) == ("call.wav", "audio/wav")
+        assert (part.get_filename(), part.get_content_type(), part["X-Recording-Id"]) == (
+            "call.wav",
+            "audio/wav",
+            "rec-1",
+        )
 
 
 def test_applies_request_options_to_every_request(create_chunked: _CreateChunked) -> None:
@@ -394,6 +402,22 @@ def test_resuming_an_mp3_job_at_resume_ms_sends_the_same_chunks_as_the_job_that_
     assert stopped.resume_ms == 1446
     assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(c.start_ms, c.end_ms) for c in stopped.chunks[2:]]
     assert resumed.complete
+
+
+def test_resume_ms_passes_over_a_chunk_that_could_not_be_decoded_before_the_chunk_that_stopped_the_job(
+    create_chunked: _CreateChunked,
+) -> None:
+    def respond(number: int) -> httpx.Response:
+        if number == 2:
+            return _failed(400, "audio_decode_failed")
+        if number == 3:
+            return _failed(402, "payment_required")
+        return _succeeded(number)
+
+    result = create_chunked([], respond, file=_wav(5000), max_chunk_ms=1000)
+
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "failed", "not_attempted", "not_attempted"]
+    assert result.resume_ms == 2000
 
 
 @pytest.mark.parametrize(
