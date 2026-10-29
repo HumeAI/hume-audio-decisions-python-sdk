@@ -8,7 +8,7 @@ from ..core.api_error import ApiError
 from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
-from .chunks import iter_audio_chunks
+from .chunks import plan_audio_chunks
 
 ChunkStatus = typing.Literal["succeeded", "failed", "not_attempted"]
 
@@ -88,12 +88,14 @@ def send_chunks(
 ) -> ChunkedDecisionsResult:
     results = []
     stopped = False
-    for chunk in iter_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms):
+    # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
+    for chunk in plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms):
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
         if not stopped:
+            data = chunk.build()
             try:
-                response = create(_with_content(file, chunk.data))
+                response = create(_with_content(file, data))
             except Exception as raised:
                 error = raised
                 stopped = not _fails_only_this_chunk(raised)
@@ -111,15 +113,16 @@ async def send_chunks_async(
 ) -> ChunkedDecisionsResult:
     # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
     # thread to keep the event loop free.
-    chunks = await asyncio.to_thread(iter_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    chunks = await asyncio.to_thread(plan_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
     results = []
     stopped = False
     for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
         if not stopped:
+            data = chunk.build()
             try:
-                response = await create(_with_content(file, chunk.data))
+                response = await create(_with_content(file, data))
             except Exception as raised:
                 error = raised
                 stopped = not _fails_only_this_chunk(raised)

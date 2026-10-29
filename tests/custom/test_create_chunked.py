@@ -19,7 +19,7 @@ from hume_decisions import (
     Question_Noul,
     TooManyRequestsError,
 )
-from hume_decisions.audio_helpers import ChunkedDecisionsResult, iter_audio_chunks
+from hume_decisions.audio_helpers import ChunkedDecisionsResult, chunks, iter_audio_chunks
 from hume_decisions.core import ApiError
 
 _REQUEST = DecisionsRequest(
@@ -189,6 +189,28 @@ def test_stops_at_any_other_error_and_records_the_rest_as_not_attempted(
     assert [(c.start_ms, c.end_ms, c.error) for c in result.chunks[2:]] == [(2000, 3000, None), (3000, 4000, None)]
     assert result.responses[0] is not None
     assert not result.complete
+
+
+def test_copies_no_chunk_after_a_stop(create_chunked: _CreateChunked, monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: typing.List[httpx.Request] = []
+    copied: typing.List[int] = []
+
+    def wav_chunk(data: memoryview, audio: typing.Any, start: int, end: int) -> bytes:
+        copied.append(start)
+        return original(data, audio, start, end)
+
+    original = chunks.wav_chunk
+    monkeypatch.setattr(chunks, "wav_chunk", wav_chunk)
+
+    result = create_chunked(
+        requests,
+        lambda number: _failed(402, "payment_required") if number == 2 else _succeeded(number),
+        file=_wav(4000),
+        chunk_ms=1000,
+    )
+
+    assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted", "not_attempted"]
+    assert copied == [0, 8000]
 
 
 def test_stops_when_the_connection_drops(create_chunked: _CreateChunked) -> None:

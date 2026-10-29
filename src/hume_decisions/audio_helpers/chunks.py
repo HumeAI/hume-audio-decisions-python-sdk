@@ -1,6 +1,7 @@
 # Maintained by hand and listed in .fernignore, so SDK regeneration leaves it in place.
 
 import dataclasses
+import functools
 import io
 import operator
 import typing
@@ -42,6 +43,16 @@ class AudioChunk:
     start_ms: int
     end_ms: int
     data: bytes
+
+
+@dataclasses.dataclass(frozen=True)
+class PlannedChunk:
+    """A chunk's place in the recording, with its data left to be copied when it is needed."""
+
+    index: int
+    start_ms: int
+    end_ms: int
+    build: typing.Callable[[], bytes]
 
 
 def iter_audio_chunks(
@@ -127,6 +138,18 @@ def iter_audio_chunks(
     for chunk in chunks:
         print(chunk.index, chunk.start_ms, chunk.end_ms, len(chunk.data))
     """
+    chunks = plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    return (AudioChunk(chunk.index, chunk.start_ms, chunk.end_ms, chunk.build()) for chunk in chunks)
+
+
+def plan_audio_chunks(
+    file: File,
+    *,
+    chunk_ms: int,
+    start_ms: typing.Optional[int] = None,
+    end_ms: typing.Optional[int] = None,
+) -> typing.Iterator[PlannedChunk]:
+    """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
     chunk_ms = _check_integer("chunk_ms", chunk_ms)
     if not 1 <= chunk_ms <= MAX_CHUNK_MS:
         raise ValueError(f"chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {chunk_ms}.")
@@ -179,7 +202,7 @@ def _check_range(count: int, duration_ms: int, start_ms: typing.Optional[int], e
 
 def _wav_chunks(
     data: memoryview, wav: WavAudio, chunk_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]
-) -> typing.Iterator[AudioChunk]:
+) -> typing.Iterator[PlannedChunk]:
     duration_ms = _to_ms(wav.sample_count, wav.sample_rate)
     _check_range(wav.sample_count, duration_ms, start_ms, end_ms)
     # The duration is rounded to the millisecond, so it can fall short of the final sample.
@@ -207,7 +230,7 @@ def _check_wav_size(wav: WavAudio, chunk_ms: int, range_samples: int) -> None:
 
 def _mp3_chunks(
     data: memoryview, mp3: Mp3Audio, chunk_ms: int, start_ms: typing.Optional[int], end_ms: typing.Optional[int]
-) -> typing.Iterator[AudioChunk]:
+) -> typing.Iterator[PlannedChunk]:
     frame_samples = mp3.samples_per_frame
     duration_ms = _to_ms(_mp3_end_sample(mp3) - mp3.leading_samples, mp3.sample_rate)
     _check_range(mp3.frame_count, duration_ms, start_ms, end_ms)
@@ -251,7 +274,7 @@ def _frames_ms(mp3: Mp3Audio, frames: int) -> int:
 
 def _iter_mp3_chunks(
     data: memoryview, mp3: Mp3Audio, frames_per_chunk: int, first: int, last: int
-) -> typing.Iterator[AudioChunk]:
+) -> typing.Iterator[PlannedChunk]:
     index = 0
     new = first
     while new < last:
@@ -261,13 +284,13 @@ def _iter_mp3_chunks(
         end = min(start + frames_per_chunk, last)
         # Times are measured from where a player starts the recording, after the samples the
         # encoder and decoder add, so the first chunk can start before 0 ms.
-        yield AudioChunk(
+        yield PlannedChunk(
             index=index,
             start_ms=_to_ms(start * mp3.samples_per_frame - mp3.leading_samples, mp3.sample_rate),
             end_ms=_to_ms(
                 min(end * mp3.samples_per_frame, _mp3_end_sample(mp3)) - mp3.leading_samples, mp3.sample_rate
             ),
-            data=mp3_chunk(data, mp3, start, end),
+            build=functools.partial(mp3_chunk, data, mp3, start, end),
         )
         index += 1
         new = end
@@ -275,18 +298,18 @@ def _iter_mp3_chunks(
 
 def _iter_wav_chunks(
     data: memoryview, audio: WavAudio, chunk_ms: int, start_ms: int, last: int
-) -> typing.Iterator[AudioChunk]:
+) -> typing.Iterator[PlannedChunk]:
     index = 0
     start = _to_sample(start_ms, audio.sample_rate)
     while start < last:
         # Each cut is computed from start_ms rather than from the previous cut, so rounding does not
         # accumulate.
         end = min(_to_sample(start_ms + (index + 1) * chunk_ms, audio.sample_rate), last)
-        yield AudioChunk(
+        yield PlannedChunk(
             index=index,
             start_ms=_to_ms(start, audio.sample_rate),
             end_ms=_to_ms(end, audio.sample_rate),
-            data=wav_chunk(data, audio, start, end),
+            build=functools.partial(wav_chunk, data, audio, start, end),
         )
         index += 1
         start = end
