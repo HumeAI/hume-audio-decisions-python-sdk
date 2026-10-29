@@ -255,6 +255,8 @@ with open("long_call.wav", "rb") as audio:
                 saved.write(chunk.response.json())
 ```
 
+To resume a job run with `iter_create_chunked`, keep the results it yields. When a chunk stopped the job, `ChunkedDecisionsResult(tuple(results), start_ms=start_ms).resume_ms` gives where to resume, as for `create_chunked`, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and `start_ms` set to the one the job was given, if any. When your process stopped instead, no chunk stopped the job and `resume_ms` is `None`, so resume at the `end_ms` of the last chunk you have a result for, not at the `start_ms` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have. In both cases, pass the same `end_ms` as the job that stopped.
+
 With `AsyncDecisionsClient`, iterate with `async for`. The async iterator reads the recording when iteration starts, so keep the file open while iterating.
 
 You can also send several chunks at a time with the async client:
