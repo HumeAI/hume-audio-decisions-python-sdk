@@ -24,14 +24,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 1cd12f7e82b1a904e4493def9d57b6d02466890b
+  - commit_sha: 7c414d81e3681cb90ccfe0f47795084d8a413d7d
+    tree_hash: 8b31adc32c1380e18fd0b540b9c23e10ab3da879
+    timestamp: 2026-10-29T01:12:09.004Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: 7c414d81e3681cb90ccfe0f47795084d8a413d7d
 patches:
   - id: patch-95641ac3
     content_hash: sha256:403ea10ce493e9ac9a8b1399a47174519036f388936b890f53162da0e88d9d1e
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 1cd12f7e82b1a904e4493def9d57b6d02466890b
+    base_generation: 7c414d81e3681cb90ccfe0f47795084d8a413d7d
     files:
       - .github/workflows/ci.yml
     patch_content: |
