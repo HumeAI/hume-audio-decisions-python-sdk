@@ -56,6 +56,11 @@ def _failed(status: int, code: str, headers: typing.Optional[typing.Dict[str, st
     )
 
 
+def _rate_limited() -> httpx.Response:
+    # Hume's API gateway answers a rate limit before the service does, so the body has no error code.
+    return httpx.Response(429, headers={"retry-after-ms": "1"}, json={"message": "Too many requests"})
+
+
 _Respond = typing.Callable[[int], httpx.Response]
 _CreateChunked = typing.Callable[..., ChunkedDecisionsResult]
 
@@ -230,10 +235,9 @@ def test_stops_when_the_connection_drops(create_chunked: _CreateChunked) -> None
 
 def test_retries_a_rate_limited_chunk_before_moving_on(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
-    rate_limited = _failed(429, "rate_limited", headers={"retry-after-ms": "1"})
 
     result = create_chunked(
-        requests, lambda number: rate_limited if number == 2 else _succeeded(number), file=_wav(2000), chunk_ms=1000
+        requests, lambda number: _rate_limited() if number == 2 else _succeeded(number), file=_wav(2000), chunk_ms=1000
     )
 
     assert len(requests) == 3
@@ -244,11 +248,10 @@ def test_retries_a_rate_limited_chunk_before_moving_on(create_chunked: _CreateCh
 
 def test_stops_when_rate_limit_retries_run_out(create_chunked: _CreateChunked) -> None:
     requests: typing.List[httpx.Request] = []
-    rate_limited = _failed(429, "rate_limited", headers={"retry-after-ms": "1"})
 
     result = create_chunked(
         requests,
-        lambda number: rate_limited if number >= 2 else _succeeded(number),
+        lambda number: _rate_limited() if number >= 2 else _succeeded(number),
         file=_wav(3000),
         chunk_ms=1000,
         request_options={"max_retries": 1},
