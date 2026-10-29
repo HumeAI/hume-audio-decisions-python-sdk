@@ -3,6 +3,7 @@
 import typing
 
 from .. import core
+from ..audio_helpers._downmix import DownmixStrategy
 from ..audio_helpers.chunks import ChunkSplit
 from ..audio_helpers.results import ChunkedDecisionsResult, ChunkResult, iter_send_chunks, iter_send_chunks_async
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
@@ -140,6 +141,7 @@ class DecisionsClient:
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         split: ChunkSplit = "even",
+        downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[ChunkResult]:
         """
@@ -147,7 +149,7 @@ class DecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
-        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
         A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 
@@ -173,6 +175,13 @@ class DecisionsClient:
             "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
             remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
+
+        downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the
+            default, the model hears the same audio. "first_channel" keeps only the first channel, so the model hears
+            only that one, and None sends the audio as it is. MP3 files are sent as they are.
+            `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -218,6 +227,7 @@ class DecisionsClient:
             start_ms=start_ms,
             end_ms=end_ms,
             split=split,
+            downmix_strategy=downmix_strategy,
         )
 
     def create_chunked(
@@ -229,6 +239,7 @@ class DecisionsClient:
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         split: ChunkSplit = "even",
+        downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
@@ -238,7 +249,7 @@ class DecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
-        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
         A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out. To resume a job that stopped, pass the result's `resume_ms` as `start_ms` to a new job with the same `end_ms`. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent.
 
@@ -264,6 +275,13 @@ class DecisionsClient:
             "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
             remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
+
+        downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the
+            default, the model hears the same audio. "first_channel" keeps only the first channel, so the model hears
+            only that one, and None sends the audio as it is. MP3 files are sent as they are.
+            `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -312,6 +330,7 @@ class DecisionsClient:
                     start_ms=start_ms,
                     end_ms=end_ms,
                     split=split,
+                    downmix_strategy=downmix_strategy,
                     request_options=request_options,
                 )
             ),
@@ -452,6 +471,7 @@ class AsyncDecisionsClient:
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         split: ChunkSplit = "even",
+        downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[ChunkResult]:
         """
@@ -459,7 +479,7 @@ class AsyncDecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
-        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
         A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 
@@ -485,6 +505,13 @@ class AsyncDecisionsClient:
             "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
             remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
+
+        downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the
+            default, the model hears the same audio. "first_channel" keeps only the first channel, so the model hears
+            only that one, and None sends the audio as it is. MP3 files are sent as they are.
+            `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -538,6 +565,7 @@ class AsyncDecisionsClient:
             start_ms=start_ms,
             end_ms=end_ms,
             split=split,
+            downmix_strategy=downmix_strategy,
         )
 
     async def create_chunked(
@@ -549,6 +577,7 @@ class AsyncDecisionsClient:
         start_ms: typing.Optional[int] = None,
         end_ms: typing.Optional[int] = None,
         split: ChunkSplit = "even",
+        downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
@@ -558,7 +587,7 @@ class AsyncDecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
-        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
         A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out. To resume a job that stopped, pass the result's `resume_ms` as `start_ms` to a new job with the same `end_ms`. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent.
 
@@ -584,6 +613,13 @@ class AsyncDecisionsClient:
             "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
             remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
             billed like any other. `audio_helpers.iter_audio_chunks` describes both.
+
+        downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+            How a WAV file is mixed down before it is cut, so that the chunks are smaller to upload. The API resamples
+            every file to 16 kHz and mixes it down to one channel before the model hears it, so with "mix", the
+            default, the model hears the same audio. "first_channel" keeps only the first channel, so the model hears
+            only that one, and None sends the audio as it is. MP3 files are sent as they are.
+            `audio_helpers.iter_audio_chunks` describes each.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration, applied to every chunk's request.
@@ -642,6 +678,7 @@ class AsyncDecisionsClient:
                         start_ms=start_ms,
                         end_ms=end_ms,
                         split=split,
+                        downmix_strategy=downmix_strategy,
                         request_options=request_options,
                     )
                 ]

@@ -20,7 +20,13 @@ from hume_decisions import (
     Question_Noul,
     TooManyRequestsError,
 )
-from hume_decisions.audio_helpers import ChunkedDecisionsResult, ChunkResult, chunks, iter_audio_chunks
+from hume_decisions.audio_helpers import (
+    ChunkedDecisionsResult,
+    ChunkResult,
+    DownmixStrategy,
+    chunks,
+    iter_audio_chunks,
+)
 from hume_decisions.core import ApiError
 
 _ASSETS = pathlib.Path(__file__).parent / "assets"
@@ -31,13 +37,13 @@ _REQUEST = DecisionsRequest(
 )
 
 
-def _wav(milliseconds: int, *, sample_rate: int = 8000) -> bytes:
+def _wav(milliseconds: int, *, sample_rate: int = 8000, channels: int = 1) -> bytes:
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as wav:
-        wav.setnchannels(1)
+        wav.setnchannels(channels)
         wav.setsampwidth(2)
         wav.setframerate(sample_rate)
-        wav.writeframes(random.Random(0).randbytes(sample_rate * milliseconds // 1000 * 2))
+        wav.writeframes(random.Random(0).randbytes(sample_rate * milliseconds // 1000 * 2 * channels))
     return buffer.getvalue()
 
 
@@ -142,6 +148,19 @@ def test_sends_each_chunk_in_order_and_returns_each_response(create_chunked: _Cr
     assert [c.status for c in result.chunks] == ["succeeded"] * 3
     assert [c.error for c in result.chunks] == [None] * 3
     assert result.complete
+
+
+@pytest.mark.parametrize("downmix_strategy", ["mix", "first_channel", None])
+def test_sends_the_chunks_iter_audio_chunks_gives_for_the_downmix_strategy(
+    create_chunked: _CreateChunked, downmix_strategy: typing.Optional[DownmixStrategy]
+) -> None:
+    requests: typing.List[httpx.Request] = []
+    audio = _wav(2500, sample_rate=48000, channels=2)
+
+    create_chunked(requests, file=audio, max_chunk_ms=1000, downmix_strategy=downmix_strategy)
+
+    expected = list(iter_audio_chunks(audio, max_chunk_ms=1000, downmix_strategy=downmix_strategy))
+    assert [_parts(request)["file"].get_payload(decode=True) for request in requests] == [c.data for c in expected]
 
 
 def test_sends_only_the_requested_range(create_chunked: _CreateChunked) -> None:

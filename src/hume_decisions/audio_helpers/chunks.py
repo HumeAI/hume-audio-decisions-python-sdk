@@ -7,6 +7,7 @@ import operator
 import typing
 
 from ..core.file import File
+from ._downmix import DownmixStrategy, downmix_wav
 from ._mp3 import Mp3Audio, is_mp3, mp3_chunk, parse_mp3
 from ._wav import WavAudio, is_wav, parse_wav, wav_chunk
 
@@ -38,7 +39,7 @@ class AudioChunk:
         Where the chunk ends in the recording, in milliseconds, rounded to the nearest millisecond.
 
     data : bytes
-        The chunk as a file in the recording's format.
+        The chunk as a file in the recording's format, after any mixdown `downmix_strategy` asks for.
     """
 
     index: int
@@ -64,6 +65,7 @@ def iter_audio_chunks(
     start_ms: typing.Optional[int] = None,
     end_ms: typing.Optional[int] = None,
     split: ChunkSplit = "even",
+    downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
 ) -> typing.Iterator[AudioChunk]:
     """
     Splits a recording, or part of one, into chunks short enough for the Decisions API.
@@ -78,10 +80,10 @@ def iter_audio_chunks(
       for its context and questions like any other, however short it is. Use it when chunks must be
       the same length across recordings.
 
-    No chunk is empty. The audio is copied as it is, never decoded or re-encoded, so cuts fall
-    where the format allows:
+    No chunk is empty. Apart from the WAV mixdown `downmix_strategy` asks for, the audio is copied
+    as it is, never decoded or re-encoded, so cuts fall where the format allows:
 
-    - A WAV file is cut between samples. With "fixed", a cut can fall up to one sample before
+    - A WAV file is cut between samples, after the mixdown. With "fixed", a cut can fall up to one sample before
       `start_ms` plus a whole multiple of `max_chunk_ms`, so the cuts stay on that grid. Each chunk
       is a new WAV file with the recording's sample format and only its audio; other chunks in the
       file, such as metadata, are left out.
@@ -101,10 +103,15 @@ def iter_audio_chunks(
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
-    The whole recording is read into memory and checked before this function returns, so that a
-    file that cannot be split is rejected before any chunk is produced. Each chunk's `data` is a
-    copy, made as the chunk is produced, so keeping every chunk, as `list()` does, holds the
-    recording in memory twice.
+    The model hears audio at 16 kHz in one channel: the API resamples and mixes down every file
+    before the model hears it. A WAV file is mixed down the same way before it is cut, by default,
+    so that the chunks are smaller to upload while the model hears the same audio. `downmix_strategy`
+    describes how. MP3 files are cut as they are, because they are already compressed.
+
+    The whole recording is read into memory, mixed down and checked before this function returns,
+    so that a file that cannot be split is rejected before any chunk is produced. Each chunk's
+    `data` is a copy, made as the chunk is produced, so keeping every chunk, as `list()` does, holds
+    the recording in memory twice.
 
     Parameters
     ----------
@@ -118,9 +125,10 @@ def iter_audio_chunks(
     max_chunk_ms : int
         The longest a chunk can be, in milliseconds, from 1 to 300000. A WAV chunk must also be at
         most 24,000,000 bytes, so that the API accepts it, which 5 minutes of WAV fits only at just
-        under 80,000 bytes per second, such as 16 kHz 16-bit stereo. With "even", a WAV file that
-        does not fit is cut into shorter chunks that do. With "fixed", it raises, and 16-bit stereo
-        needs a `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
+        under 80,000 bytes per second. A file mixed down to one channel fits in every sample format
+        but 64-bit floating point. With "even", a WAV file that does not fit is cut into shorter
+        chunks that do. With "fixed", it raises, and 16-bit stereo that is not mixed down needs a
+        `max_chunk_ms` of at most 136054 at 44.1 kHz and 124999 at 48 kHz.
 
     start_ms : typing.Optional[int]
         Where in the recording to start, in milliseconds. Defaults to the start of the recording.
@@ -133,6 +141,20 @@ def iter_audio_chunks(
         "even" for the fewest chunks of equal length, or "fixed" for chunks of `max_chunk_ms` with a
         shorter last chunk. Defaults to "even".
 
+    downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+        How a WAV file is mixed down before it is cut. Audio above 16 kHz is resampled to 16 kHz with
+        the filter the API uses, and audio at 16 kHz or below keeps its rate.
+
+        - "mix", the default, mixes two channels into one the way the API does, adding them at -3 dB
+          each, and stores the result as 32-bit floating point so that loud audio cannot clip. The
+          model hears the same audio as it would from the original file. Audio with more than two
+          channels keeps its channels, because the API weighs them by speaker position.
+        - "first_channel" keeps only the first channel, in the recording's sample format, so the
+          model hears only that channel. Use it when that channel holds the speaker to judge.
+        - None cuts the audio as it is.
+
+        Mono audio at 16 kHz or below is never changed.
+
     Returns
     -------
     typing.Iterator[AudioChunk]
@@ -142,7 +164,8 @@ def iter_audio_chunks(
     Raises
     ------
     ValueError
-        split is not "even" or "fixed", max_chunk_ms is out of range, too long with "fixed" for a
+        split is not "even" or "fixed", downmix_strategy is not "mix", "first_channel" or None,
+        max_chunk_ms is out of range, too long with "fixed" for a
         WAV chunk to fit the API's size limit, or too short for an MP3 chunk to hold a new frame and
         the frames it needs, start_ms and end_ms do not select audio within the recording, or the
         recording is empty or not a file this helper supports, such as a compressed WAV or RF64
@@ -158,7 +181,14 @@ def iter_audio_chunks(
     for chunk in chunks:
         print(chunk.index, chunk.start_ms, chunk.end_ms, len(chunk.data))
     """
-    chunks = plan_audio_chunks(file, max_chunk_ms=max_chunk_ms, start_ms=start_ms, end_ms=end_ms, split=split)
+    chunks = plan_audio_chunks(
+        file,
+        max_chunk_ms=max_chunk_ms,
+        start_ms=start_ms,
+        end_ms=end_ms,
+        split=split,
+        downmix_strategy=downmix_strategy,
+    )
     return (AudioChunk(chunk.index, chunk.start_ms, chunk.end_ms, chunk.build()) for chunk in chunks)
 
 
@@ -169,10 +199,13 @@ def plan_audio_chunks(
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
     split: ChunkSplit,
+    downmix_strategy: typing.Optional[DownmixStrategy],
 ) -> typing.Iterator[PlannedChunk]:
     """Checks and plans the chunks `iter_audio_chunks` gives, without copying any chunk's data."""
     if split not in ("even", "fixed"):
         raise ValueError(f'split must be "even" or "fixed", got {split!r}.')
+    if downmix_strategy not in ("mix", "first_channel", None):
+        raise ValueError(f'downmix_strategy must be "mix", "first_channel" or None, got {downmix_strategy!r}.')
     max_chunk_ms = _check_integer("max_chunk_ms", max_chunk_ms)
     if not 1 <= max_chunk_ms <= MAX_CHUNK_MS:
         raise ValueError(f"max_chunk_ms must be between 1 and {MAX_CHUNK_MS}, got {max_chunk_ms}.")
@@ -185,7 +218,11 @@ def plan_audio_chunks(
             raise ValueError(f"end_ms must be greater than start_ms, got {end_ms}.")
     data, given_as_str = _read(file)
     if is_wav(data):
-        return _wav_chunks(data, parse_wav(data), max_chunk_ms, start, end_ms, split)
+        wav = parse_wav(data)
+        converted = None if downmix_strategy is None else downmix_wav(data, wav, downmix_strategy)
+        if converted is not None:
+            data, wav = converted
+        return _wav_chunks(data, wav, max_chunk_ms, start, end_ms, split)
     if is_mp3(data):
         return _mp3_chunks(data, parse_mp3(data), max_chunk_ms, start, end_ms, split)
     message = "Unsupported audio format. Only MP3 and WAV files can be split into chunks."
