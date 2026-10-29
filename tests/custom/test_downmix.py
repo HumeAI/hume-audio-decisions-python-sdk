@@ -1,0 +1,201 @@
+import shutil
+import struct
+import subprocess
+import typing
+
+import numpy as np
+import numpy.typing as npt
+import pytest
+
+from hume_decisions.audio_helpers._downmix import DownmixStrategy, downmix_wav
+from hume_decisions.audio_helpers._wav import parse_wav, wav_chunk
+
+_Samples = npt.NDArray[np.float64]
+
+_FFMPEG = shutil.which("ffmpeg")
+_FORMATS = [(1, False), (2, False), (3, False), (4, False), (4, True), (8, True)]
+
+
+def _wav(samples: _Samples, *, sample_rate: int, sample_width: int = 2, is_float: bool = False) -> bytes:
+    """A WAV file holding `samples`, shaped (frames, channels) and scaled to -1 to 1."""
+    if is_float:
+        data = samples.astype(f"<f{sample_width}").tobytes()
+    else:
+        full_scale = 1 << (sample_width * 8 - 1)
+        values = np.clip(np.rint(samples * full_scale), -full_scale, full_scale - 1).astype(np.int64)
+        if sample_width == 1:
+            data = (values + 128).astype(np.uint8).tobytes()
+        else:
+            data = values.astype("<i8").view(np.uint8).reshape(*values.shape, 8)[..., :sample_width].tobytes()
+    channels = samples.shape[1]
+    frame_bytes = sample_width * channels
+    fmt = struct.pack(
+        "<HHIIHH", 3 if is_float else 1, channels, sample_rate, sample_rate * frame_bytes, frame_bytes, sample_width * 8
+    )
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"data" + struct.pack("<I", len(data)) + data
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+class _Audio(typing.NamedTuple):
+    sample_rate: int
+    sample_width: int
+    is_float: bool
+    # Shaped (frames, channels) and scaled to -1 to 1.
+    samples: _Samples
+
+
+def _read(file: bytes) -> _Audio:
+    offset = 12
+    fmt = b""
+    while True:
+        chunk_id, size = file[offset : offset + 4], struct.unpack_from("<I", file, offset + 4)[0]
+        body = file[offset + 8 : offset + 8 + size]
+        if chunk_id == b"fmt ":
+            fmt = body
+        if chunk_id == b"data":
+            break
+        offset += 8 + size + size % 2
+    tag, channels, sample_rate, _, _, bits = struct.unpack("<HHIIHH", fmt[:16])
+    width = bits // 8
+    if tag == 3:
+        samples = np.frombuffer(body, f"<f{width}").astype(np.float64)
+    else:
+        raw = np.frombuffer(body, np.uint8).reshape(-1, width).astype(np.int64)
+        values = np.zeros(len(raw), np.int64)
+        for byte in range(width):
+            values |= raw[:, byte] << (8 * byte)
+        if width == 1:
+            values -= 128
+        else:
+            values[values >= 1 << (bits - 1)] -= 1 << bits
+        samples = values / (1 << (bits - 1))
+    return _Audio(sample_rate, width, tag == 3, samples.reshape(-1, channels))
+
+
+def _downmix(file: bytes, strategy: DownmixStrategy = "mix") -> typing.Optional[bytes]:
+    data = memoryview(file)
+    converted = downmix_wav(data, parse_wav(data), strategy)
+    if converted is None:
+        return None
+    samples, wav = converted
+    return wav_chunk(samples, wav, 0, wav.sample_count)
+
+
+def _noise(frames: int, channels: int) -> _Samples:
+    return np.random.default_rng(frames).uniform(-0.5, 0.5, (frames, channels))
+
+
+@pytest.mark.parametrize("strategy", ["mix", "first_channel"])
+@pytest.mark.parametrize("sample_rate", [8000, 16000])
+def test_mono_audio_at_16_khz_or_below_is_left_unchanged(strategy: DownmixStrategy, sample_rate: int) -> None:
+    assert _downmix(_wav(_noise(1000, 1), sample_rate=sample_rate), strategy) is None
+
+
+def test_mixing_more_than_two_channels_at_16_khz_or_below_leaves_the_audio_unchanged() -> None:
+    assert _downmix(_wav(_noise(1000, 6), sample_rate=16000)) is None
+
+
+def test_audio_above_16_khz_is_resampled_to_16_khz_covering_every_input_sample() -> None:
+    audio = _read(typing.cast(bytes, _downmix(_wav(_noise(44107, 1), sample_rate=44100))))
+
+    assert audio.sample_rate == 16000
+    # 44107 samples at 44.1 kHz last 16002.5 samples at 16 kHz.
+    assert len(audio.samples) == 16003
+
+
+def test_resampling_keeps_a_constant_level() -> None:
+    audio = _read(typing.cast(bytes, _downmix(_wav(np.full((4800, 1), 0.25), sample_rate=48000))))
+
+    assert np.all(audio.samples == 0.25)
+
+
+def test_resampling_clips_integer_samples_instead_of_wrapping_them() -> None:
+    # The filter overshoots the edges of a full-scale square wave.
+    square = np.where(np.arange(4800) // 240 % 2 == 0, 1.0, -1.0)[:, None]
+
+    audio = _read(typing.cast(bytes, _downmix(_wav(square, sample_rate=48000))))
+
+    assert audio.samples.max() == 32767 / 32768
+    highs = np.arange(len(audio.samples)) // 80 % 2 == 0
+    assert np.all(audio.samples[highs] > 0)
+    assert np.all(audio.samples[~highs] < 0)
+
+
+@pytest.mark.parametrize("sample_width, is_float", _FORMATS)
+def test_mixing_two_channels_adds_them_at_minus_3_db_as_32_bit_float(sample_width: int, is_float: bool) -> None:
+    stereo = np.column_stack([np.full(100, 0.5), np.full(100, -0.25)])
+
+    audio = _read(
+        typing.cast(bytes, _downmix(_wav(stereo, sample_rate=16000, sample_width=sample_width, is_float=is_float)))
+    )
+
+    assert (audio.sample_width, audio.is_float, audio.samples.shape) == (4, True, (100, 1))
+    assert np.allclose(audio.samples, 0.25 * np.sqrt(0.5), atol=1e-7)
+
+
+@pytest.mark.parametrize("sample_width, is_float", _FORMATS)
+def test_first_channel_keeps_the_sample_format_and_every_sample_of_the_first_channel(
+    sample_width: int, is_float: bool
+) -> None:
+    file = _wav(_noise(1000, 3), sample_rate=8000, sample_width=sample_width, is_float=is_float)
+
+    audio = _read(typing.cast(bytes, _downmix(file, "first_channel")))
+
+    assert (audio.sample_rate, audio.sample_width, audio.is_float) == (8000, sample_width, is_float)
+    assert np.array_equal(audio.samples, _read(file).samples[:, :1])
+
+
+def test_mixing_more_than_two_channels_resamples_each_channel_and_keeps_them_apart() -> None:
+    audio = _read(typing.cast(bytes, _downmix(_wav(_noise(48000, 6), sample_rate=48000))))
+
+    assert (audio.sample_rate, audio.sample_width, audio.samples.shape) == (16000, 2, (16000, 6))
+
+
+@pytest.mark.skipif(_FFMPEG is None, reason="ffmpeg is not installed")
+@pytest.mark.parametrize("sample_width, is_float", _FORMATS)
+@pytest.mark.parametrize(
+    "sample_rate, channels, strategy",
+    [
+        (48000, 2, "mix"),
+        (44100, 2, "mix"),
+        (44100, 1, "mix"),
+        (8000, 2, "mix"),
+        (48000, 2, "first_channel"),
+        (22050, 6, "mix"),
+    ],
+)
+def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
+    sample_width: int, is_float: bool, sample_rate: int, channels: int, strategy: DownmixStrategy
+) -> None:
+    frames = sample_rate * 2 + 3
+    tone = 0.3 * np.sin(2 * np.pi * 440 * np.arange(frames) / sample_rate)[:, None] + 0.2 * _noise(frames, channels)
+    file = _wav(tone, sample_rate=sample_rate, sample_width=sample_width, is_float=is_float)
+
+    converted = _read(typing.cast(bytes, _downmix(file, strategy)))
+
+    # The API converts every file with `ffmpeg -i <file> -f f32le -ac 1 -ar 16000 -`.
+    pick = ["-af", "pan=mono|c0=c0"] if strategy == "first_channel" else []
+    expected = _ffmpeg(file, *pick, "-ac", "1", "-ar", "16000")
+    heard = _ffmpeg(
+        _wav(converted.samples, sample_rate=converted.sample_rate, is_float=True, sample_width=8),
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+    )
+    # ffmpeg can leave out the last output sample.
+    assert len(heard) - len(expected) in (0, 1)
+    # Each integer channel is rounded by up to half its smallest step, and the mix weighs each channel by at most 1.
+    channels = converted.samples.shape[1]
+    rounding = 0.0 if converted.is_float else channels * 0.5 / (1 << (converted.sample_width * 8 - 1))
+    assert np.abs(heard[: len(expected)] - expected).max() <= rounding + 3e-7
+
+
+def _ffmpeg(file: bytes, *options: str) -> _Samples:
+    output = subprocess.run(
+        [typing.cast(str, _FFMPEG), "-nostdin", "-v", "error", "-i", "-", *options, "-f", "f64le", "-"],
+        input=file,
+        capture_output=True,
+        check=True,
+    ).stdout
+    return np.frombuffer(output, "<f8")
