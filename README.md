@@ -228,18 +228,16 @@ Chunks are sent one at a time, in order, and a request the API rejects, or whose
 2. Any other error stops the job, such as running out of tokens (402), an invalid request, or a dropped connection. The chunks after it have the status `not_attempted`: no request was sent for them, so they were not billed.
 3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `max_retries` in `request_options` to allow more.
 
-To resume a job that stopped, call `create_chunked` again with `start_ms` set to the `end_ms` of the chunk before the one that stopped it. For a WAV file, `end_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
+To resume a job that stopped, call `create_chunked` again with `start_ms` set to `result.resume_ms`, which is where the chunk that stopped the job starts, and with the same `end_ms`. `resume_ms` is `None` when no chunk stopped the job. For a WAV file, a chunk's `start_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
 
 The whole recording is read into memory before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
 
 `iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way.
 
-`create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it had received are lost, although they were billed. To keep each response as it arrives, send the chunks yourself and save each response before sending the next chunk:
+`create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it had received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
 
 ```python
-from hume_decisions import DecisionsClient, DecisionsRequest, Error, Question_Moment
-from hume_decisions.audio_helpers import iter_audio_chunks
-from hume_decisions.core import ApiError
+from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
 
 client = DecisionsClient()
 request = DecisionsRequest(
@@ -247,18 +245,15 @@ request = DecisionsRequest(
 )
 
 with open("long_call.wav", "rb") as audio:
-    chunks = iter_audio_chunks(audio, chunk_ms=300_000)
-for chunk in chunks:
-    try:
-        response = client.decisions.create(file=("long_call.wav", chunk.data, "audio/wav"), request=request)
-    except ApiError as error:
-        # Only a chunk that cannot be decoded fails on its own. Any other error would fail the remaining chunks too.
-        if isinstance(error.body, Error) and error.body.code == "audio_decode_failed":
-            continue
-        raise
-    with open(f"chunk_{chunk.index}_{chunk.start_ms}.json", "w") as saved:
-        saved.write(response.json())
+    for chunk in client.decisions.iter_create_chunked(
+        file=("long_call.wav", audio, "audio/wav"), request=request, chunk_ms=300_000
+    ):
+        if chunk.response is not None:
+            with open(f"chunk_{chunk.index}_{chunk.start_ms}.json", "w") as saved:
+                saved.write(chunk.response.json())
 ```
+
+With `AsyncDecisionsClient`, iterate with `async for`. The async iterator reads the recording when iteration starts, so keep the file open while iterating.
 
 You can also send several chunks at a time with the async client:
 

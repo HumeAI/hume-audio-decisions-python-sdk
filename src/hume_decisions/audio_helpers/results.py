@@ -9,7 +9,7 @@ from ..core.api_error import ApiError
 from ..core.file import File
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
-from .chunks import plan_audio_chunks
+from .chunks import PlannedChunk, plan_audio_chunks
 
 ChunkStatus = typing.Literal["succeeded", "failed", "not_attempted"]
 
@@ -78,19 +78,40 @@ class ChunkedDecisionsResult:
         """Whether every chunk's request succeeded."""
         return all(chunk.response is not None for chunk in self.chunks)
 
+    @property
+    def resume_ms(self) -> typing.Optional[int]:
+        """
+        Where the chunk that stopped the job starts, to pass as `start_ms`, with the same `end_ms`, to
+        a new job that sends it and the chunks after it again. None when no chunk stopped the job.
+        """
+        for position, chunk in enumerate(self.chunks):
+            if chunk.error is not None and not _fails_only_this_chunk(chunk.error, self.chunks[:position]):
+                # The first chunk of an MP3 file can start before 0, and start_ms cannot.
+                return max(0, chunk.start_ms)
+        return None
 
-def send_chunks(
+
+def iter_send_chunks(
     create: typing.Callable[[File], DecisionsResponse],
     file: File,
     *,
     chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
-) -> ChunkedDecisionsResult:
+) -> typing.Iterator[ChunkResult]:
+    # Planning reads and checks the whole file, so a file that cannot be split raises here, when the
+    # caller asks for the iterator, rather than when iteration starts.
+    chunks = plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
+    return _send(create, file, chunks)
+
+
+def _send(
+    create: typing.Callable[[File], DecisionsResponse], file: File, chunks: typing.Iterable[PlannedChunk]
+) -> typing.Iterator[ChunkResult]:
     results: typing.List[ChunkResult] = []
     stopped = False
     # A chunk's data is copied only when it is sent, so the chunks after a stop cost nothing.
-    for chunk in plan_audio_chunks(file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms):
+    for chunk in chunks:
         response: typing.Optional[DecisionsResponse] = None
         error: typing.Optional[Exception] = None
         if not stopped:
@@ -100,18 +121,19 @@ def send_chunks(
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
                 stopped = not _fails_only_this_chunk(raised, results)
-        results.append(ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error))
-    return ChunkedDecisionsResult(tuple(results))
+        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        results.append(result)
+        yield result
 
 
-async def send_chunks_async(
+async def iter_send_chunks_async(
     create: typing.Callable[[File], typing.Awaitable[DecisionsResponse]],
     file: File,
     *,
     chunk_ms: int,
     start_ms: typing.Optional[int],
     end_ms: typing.Optional[int],
-) -> ChunkedDecisionsResult:
+) -> typing.AsyncIterator[ChunkResult]:
     # Reading and parsing the whole file happens here, before the first chunk, so it runs in a worker
     # thread to keep the event loop free.
     chunks = await asyncio.to_thread(plan_audio_chunks, file, chunk_ms=chunk_ms, start_ms=start_ms, end_ms=end_ms)
@@ -127,8 +149,9 @@ async def send_chunks_async(
             except (ApiError, httpx.HTTPError) as raised:
                 error = raised
                 stopped = not _fails_only_this_chunk(raised, results)
-        results.append(ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error))
-    return ChunkedDecisionsResult(tuple(results))
+        result = ChunkResult(chunk.index, chunk.start_ms, chunk.end_ms, response=response, error=error)
+        results.append(result)
+        yield result
 
 
 def _fails_only_this_chunk(error: Exception, earlier: typing.Sequence[ChunkResult]) -> bool:

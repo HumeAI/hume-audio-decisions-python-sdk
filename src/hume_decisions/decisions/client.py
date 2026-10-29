@@ -3,7 +3,7 @@
 import typing
 
 from .. import core
-from ..audio_helpers.results import ChunkedDecisionsResult, send_chunks, send_chunks_async
+from ..audio_helpers.results import ChunkedDecisionsResult, ChunkResult, iter_send_chunks, iter_send_chunks_async
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.decisions_request import DecisionsRequest
@@ -130,6 +130,88 @@ class DecisionsClient:
         _response = self._raw_client.create(request=request, file=file, request_options=request_options)
         return _response.data
 
+    def iter_create_chunked(
+        self,
+        *,
+        request: DecisionsRequest,
+        file: core.File,
+        chunk_ms: int,
+        start_ms: typing.Optional[int] = None,
+        end_ms: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> typing.Iterator[ChunkResult]:
+        """
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+
+        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+
+        Parameters
+        ----------
+        request : DecisionsRequest
+            Sent unchanged with every chunk.
+
+        file : core.File
+            The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
+
+        chunk_ms : int
+            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
+            the limit on the size of a WAV chunk.
+
+        start_ms : typing.Optional[int]
+            Where in the recording to start, in milliseconds. Defaults to the start of the recording.
+
+        end_ms : typing.Optional[int]
+            Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration, applied to every chunk's request.
+
+        Yields
+        ------
+        ChunkResult
+            Each chunk's position in the recording and its response or error, in the order of the chunks.
+
+        Raises
+        ------
+        ValueError
+            The recording cannot be split as requested. This is raised by the call itself, before any request is sent.
+
+        Examples
+        --------
+        from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+
+        client = DecisionsClient(
+            api_key="YOUR_API_KEY",
+        )
+        with open("call.mp3", "rb") as f:
+            for chunk in client.decisions.iter_create_chunked(
+                request=DecisionsRequest(
+                    questions={
+                        "agent_glitches": Question_Moment(
+                            instructions="Where does the agent glitch, slur or sound robotic?",
+                        ),
+                    },
+                ),
+                file=f,
+                chunk_ms=300_000,
+            ):
+                if chunk.response is not None:
+                    print(chunk.start_ms, chunk.response.run_id)
+                else:
+                    print(chunk.start_ms, chunk.status, chunk.error)
+        """
+        return iter_send_chunks(
+            lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
+            file,
+            chunk_ms=chunk_ms,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+
     def create_chunked(
         self,
         *,
@@ -143,11 +225,13 @@ class DecisionsClient:
         """
         Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing.
 
+        Sends the chunks as `iter_create_chunked` does and returns once every chunk is done. If the process stops partway through, the responses already received are lost although they were billed, so use `iter_create_chunked` to keep each response as it arrives.
+
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
 
-        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. To resume a job that stopped, pass the result's `resume_ms` as `start_ms` to a new job with the same `end_ms`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 
         Parameters
         ----------
@@ -205,12 +289,17 @@ class DecisionsClient:
             else:
                 print(chunk.start_ms, chunk.status, chunk.error)
         """
-        return send_chunks(
-            lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
-            file,
-            chunk_ms=chunk_ms,
-            start_ms=start_ms,
-            end_ms=end_ms,
+        return ChunkedDecisionsResult(
+            tuple(
+                self.iter_create_chunked(
+                    request=request,
+                    file=file,
+                    chunk_ms=chunk_ms,
+                    start_ms=start_ms,
+                    end_ms=end_ms,
+                    request_options=request_options,
+                )
+            )
         )
 
 
@@ -338,6 +427,96 @@ class AsyncDecisionsClient:
         _response = await self._raw_client.create(request=request, file=file, request_options=request_options)
         return _response.data
 
+    def iter_create_chunked(
+        self,
+        *,
+        request: DecisionsRequest,
+        file: core.File,
+        chunk_ms: int,
+        start_ms: typing.Optional[int] = None,
+        end_ms: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> typing.AsyncIterator[ChunkResult]:
+        """
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+
+        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+
+        Parameters
+        ----------
+        request : DecisionsRequest
+            Sent unchanged with every chunk.
+
+        file : core.File
+            The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
+
+        chunk_ms : int
+            Duration of each chunk in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and
+            the limit on the size of a WAV chunk.
+
+        start_ms : typing.Optional[int]
+            Where in the recording to start, in milliseconds. Defaults to the start of the recording.
+
+        end_ms : typing.Optional[int]
+            Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration, applied to every chunk's request.
+
+        Yields
+        ------
+        ChunkResult
+            Each chunk's position in the recording and its response or error, in the order of the chunks.
+
+        Raises
+        ------
+        ValueError
+            The recording cannot be split as requested. This is raised when iteration starts, before any request is sent.
+
+        Examples
+        --------
+        import asyncio
+
+        from hume_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
+
+        client = AsyncDecisionsClient(
+            api_key="YOUR_API_KEY",
+        )
+
+
+        async def main() -> None:
+            with open("call.mp3", "rb") as f:
+                async for chunk in client.decisions.iter_create_chunked(
+                    request=DecisionsRequest(
+                        questions={
+                            "agent_glitches": Question_Moment(
+                                instructions="Where does the agent glitch, slur or sound robotic?",
+                            ),
+                        },
+                    ),
+                    file=f,
+                    chunk_ms=300_000,
+                ):
+                    if chunk.response is not None:
+                        print(chunk.start_ms, chunk.response.run_id)
+                    else:
+                        print(chunk.start_ms, chunk.status, chunk.error)
+
+
+        asyncio.run(main())
+        """
+        return iter_send_chunks_async(
+            lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
+            file,
+            chunk_ms=chunk_ms,
+            start_ms=start_ms,
+            end_ms=end_ms,
+        )
+
     async def create_chunked(
         self,
         *,
@@ -351,11 +530,13 @@ class AsyncDecisionsClient:
         """
         Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing.
 
+        Sends the chunks as `iter_create_chunked` does and returns once every chunk is done. If the process stops partway through, the responses already received are lost although they were billed, so use `iter_create_chunked` to keep each response as it arrives.
+
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
 
-        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. To resume a job that stopped, pass the result's `resume_ms` as `start_ms` to a new job with the same `end_ms`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 
         Parameters
         ----------
@@ -421,10 +602,18 @@ class AsyncDecisionsClient:
 
         asyncio.run(main())
         """
-        return await send_chunks_async(
-            lambda chunk: self.create(request=request, file=chunk, request_options=request_options),
-            file,
-            chunk_ms=chunk_ms,
-            start_ms=start_ms,
-            end_ms=end_ms,
+        return ChunkedDecisionsResult(
+            tuple(
+                [
+                    chunk
+                    async for chunk in self.iter_create_chunked(
+                        request=request,
+                        file=file,
+                        chunk_ms=chunk_ms,
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        request_options=request_options,
+                    )
+                ]
+            )
         )

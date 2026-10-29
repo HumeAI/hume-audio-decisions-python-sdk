@@ -19,7 +19,7 @@ from hume_decisions import (
     Question_Noul,
     TooManyRequestsError,
 )
-from hume_decisions.audio_helpers import ChunkedDecisionsResult, chunks, iter_audio_chunks
+from hume_decisions.audio_helpers import ChunkedDecisionsResult, ChunkResult, chunks, iter_audio_chunks
 from hume_decisions.core import ApiError
 
 _REQUEST = DecisionsRequest(
@@ -63,26 +63,58 @@ def _rate_limited() -> httpx.Response:
 
 _Respond = typing.Callable[[int], httpx.Response]
 _CreateChunked = typing.Callable[..., ChunkedDecisionsResult]
+_IterCreateChunked = typing.Callable[..., typing.List[typing.Tuple[ChunkResult, int]]]
+
+
+def _transport(requests: typing.List[httpx.Request], respond: _Respond) -> httpx.MockTransport:
+    # `respond` receives the number of the request, starting at 1, counting retries.
+    def handle(http_request: httpx.Request) -> httpx.Response:
+        requests.append(http_request)
+        return respond(len(requests))
+
+    return httpx.MockTransport(handle)
 
 
 @pytest.fixture(params=["sync", "async"])
 def create_chunked(request: pytest.FixtureRequest) -> _CreateChunked:
     """Calls create_chunked on the sync or async client, which must behave the same."""
 
-    # `respond` receives the number of the request, starting at 1, counting retries.
     def call(
         requests: typing.List[httpx.Request], respond: _Respond = _succeeded, **kwargs: typing.Any
     ) -> ChunkedDecisionsResult:
-        def handle(http_request: httpx.Request) -> httpx.Response:
-            requests.append(http_request)
-            return respond(len(requests))
-
-        transport = httpx.MockTransport(handle)
+        transport = _transport(requests, respond)
         if request.param == "sync":
             client = DecisionsClient(api_key="test", httpx_client=httpx.Client(transport=transport))
             return client.decisions.create_chunked(request=_REQUEST, **kwargs)
         async_client = AsyncDecisionsClient(api_key="test", httpx_client=httpx.AsyncClient(transport=transport))
         return asyncio.run(async_client.decisions.create_chunked(request=_REQUEST, **kwargs))
+
+    return call
+
+
+@pytest.fixture(params=["sync", "async"])
+def iter_create_chunked(request: pytest.FixtureRequest) -> _IterCreateChunked:
+    """
+    Iterates iter_create_chunked on the sync or async client, pairing each result with the number of
+    requests sent when it was yielded.
+    """
+
+    def call(
+        requests: typing.List[httpx.Request], respond: _Respond = _succeeded, **kwargs: typing.Any
+    ) -> typing.List[typing.Tuple[ChunkResult, int]]:
+        transport = _transport(requests, respond)
+        if request.param == "sync":
+            client = DecisionsClient(api_key="test", httpx_client=httpx.Client(transport=transport))
+            return [
+                (chunk, len(requests)) for chunk in client.decisions.iter_create_chunked(request=_REQUEST, **kwargs)
+            ]
+        async_client = AsyncDecisionsClient(api_key="test", httpx_client=httpx.AsyncClient(transport=transport))
+
+        async def collect() -> typing.List[typing.Tuple[ChunkResult, int]]:
+            results = async_client.decisions.iter_create_chunked(request=_REQUEST, **kwargs)
+            return [(chunk, len(requests)) async for chunk in results]
+
+        return asyncio.run(collect())
 
     return call
 
@@ -283,3 +315,77 @@ def test_stops_when_rate_limit_retries_run_out(create_chunked: _CreateChunked) -
     assert len(requests) == 3
     assert [c.status for c in result.chunks] == ["succeeded", "failed", "not_attempted"]
     assert isinstance(result.chunks[1].error, TooManyRequestsError)
+
+
+def test_iterator_yields_each_result_before_sending_the_next_chunk(iter_create_chunked: _IterCreateChunked) -> None:
+    requests: typing.List[httpx.Request] = []
+
+    yielded = iter_create_chunked(
+        requests,
+        lambda number: _failed(402, "payment_required") if number == 3 else _succeeded(number),
+        file=_wav(4000),
+        chunk_ms=1000,
+    )
+
+    assert [(chunk.index, chunk.status, sent) for chunk, sent in yielded] == [
+        (0, "succeeded", 1),
+        (1, "succeeded", 2),
+        (2, "failed", 3),
+        (3, "not_attempted", 3),
+    ]
+
+
+def test_iterator_sends_nothing_when_the_recording_cannot_be_split(iter_create_chunked: _IterCreateChunked) -> None:
+    requests: typing.List[httpx.Request] = []
+
+    with pytest.raises(ValueError, match="end_ms must not exceed"):
+        iter_create_chunked(requests, file=_wav(2000), chunk_ms=1000, end_ms=2500)
+
+    assert requests == []
+
+
+def test_resuming_at_resume_ms_sends_the_chunk_that_stopped_the_job_and_those_after_it(
+    create_chunked: _CreateChunked,
+) -> None:
+    audio = _wav(4000)
+    stopped = create_chunked(
+        [],
+        lambda number: _failed(402, "payment_required") if number == 2 else _succeeded(number),
+        file=audio,
+        chunk_ms=1000,
+    )
+    requests: typing.List[httpx.Request] = []
+
+    resumed = create_chunked(requests, file=audio, chunk_ms=1000, start_ms=stopped.resume_ms)
+
+    assert stopped.resume_ms == 1000
+    assert [(c.start_ms, c.end_ms) for c in resumed.chunks] == [(1000, 2000), (2000, 3000), (3000, 4000)]
+    assert resumed.complete
+
+
+@pytest.mark.parametrize(
+    "respond",
+    [
+        pytest.param(_succeeded, id="complete"),
+        pytest.param(
+            lambda number: _failed(400, "audio_decode_failed") if number == 2 else _succeeded(number),
+            id="only a chunk that could not be decoded failed",
+        ),
+    ],
+)
+def test_resume_ms_is_none_when_no_chunk_stopped_the_job(create_chunked: _CreateChunked, respond: _Respond) -> None:
+    result = create_chunked([], respond, file=_wav(3000), chunk_ms=1000)
+
+    assert result.resume_ms is None
+
+
+def test_resume_ms_is_0_when_an_mp3_job_stops_at_its_first_chunk() -> None:
+    # The first chunk of an MP3 file starts before 0 when the encoder added samples before the recording.
+    result = ChunkedDecisionsResult(
+        (
+            ChunkResult(0, -25, 975, response=None, error=ApiError(status_code=402)),
+            ChunkResult(1, 975, 1975, response=None, error=None),
+        )
+    )
+
+    assert result.resume_ms == 0
