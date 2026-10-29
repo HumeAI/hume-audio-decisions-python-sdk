@@ -100,7 +100,14 @@ def parse_mp3(data: memoryview) -> Mp3Audio:
     reservoir_bytes: typing.List[int] = []
     main_data_bytes: typing.List[int] = []
     while offset + 4 <= len(data) and not any(bytes(data[offset : offset + len(tag)]) == tag for tag in _TRAILING_TAGS):
-        header = _read_header(data, offset)
+        try:
+            header = _read_header(data, offset)
+        except ValueError:
+            # Players skip bytes after the last frame that are neither a frame nor a tag, such as
+            # padding. When frames follow them, the bytes are damage instead.
+            if _frames_follow(data, offset + 1, first):
+                raise
+            break
         if header.version != first.version or header.sample_rate != first.sample_rate:
             raise _unsupported(f"the sample rate changes at byte {offset}")
         # A file cut short is read up to its last whole frame.
@@ -205,6 +212,27 @@ def _read_header_frame(data: memoryview, offset: int, header: _Header) -> typing
     delay = b0 << 4 | b1 >> 4
     padding = (b1 & 0x0F) << 8 | b2
     return _HeaderFrame(delay + _DECODER_DELAY, max(0, padding - _DECODER_DELAY), stated_frames)
+
+
+def _frames_follow(data: memoryview, offset: int, first: _Header) -> bool:
+    """Whether two frames in a row, of the same version and sample rate as `first`, start at or after `offset`."""
+    # Requiring two frames in a row keeps bytes that happen to look like a frame header from counting.
+    tail = bytes(data[offset:])
+    position = tail.find(0xFF)
+    while position != -1:
+        header = _matching_header(data, offset + position, first)
+        if header is not None and _matching_header(data, offset + position + header.length, first) is not None:
+            return True
+        position = tail.find(0xFF, position + 1)
+    return False
+
+
+def _matching_header(data: memoryview, offset: int, first: _Header) -> typing.Optional[_Header]:
+    try:
+        header = _read_header(data, offset)
+    except ValueError:
+        return None
+    return header if (header.version, header.sample_rate) == (first.version, first.sample_rate) else None
 
 
 def _unsupported(reason: str) -> ValueError:

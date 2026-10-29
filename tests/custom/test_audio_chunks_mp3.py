@@ -204,6 +204,15 @@ def test_mp3_cut_off_partway_through_a_frame_is_read_to_the_last_whole_frame() -
     assert [c.data for c in chunks] == [b"".join(frames)]
 
 
+@pytest.mark.parametrize("tag", [b"", b"TAG" + b"\x00" * 125])
+def test_bytes_after_the_last_frame_that_are_not_a_frame_are_left_out(tag: bytes) -> None:
+    frames = _frames(10)
+
+    chunks = list(iter_audio_chunks(b"".join(frames) + b"\x00" * 64 + b"\xff" + b"\x00" * 63 + tag, chunk_ms=1000))
+
+    assert [c.data for c in chunks] == [b"".join(frames)]
+
+
 def test_mp3_range_moves_to_the_nearest_frame_boundary() -> None:
     frames = _frames(100)
 
