@@ -146,6 +146,8 @@ class DecisionsClient:
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+
         A failed request does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 
         Parameters
@@ -428,6 +430,8 @@ class AsyncDecisionsClient:
         Splits a recording longer than `create` accepts into chunks and sends each chunk as a separate `create` request, with its own `run_id` and its own billing. The answers are not combined across chunks.
 
         The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. Each chunk is copied from it only while its request is sent, so memory use stays near the size of the recording. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
 
         A failed request does not raise. Its error is recorded on the chunk, and the responses already received are returned with it, so check `complete` before relying on the result. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
 

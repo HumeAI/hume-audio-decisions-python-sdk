@@ -1,4 +1,5 @@
 import dataclasses
+import pathlib
 import struct
 import typing
 
@@ -9,6 +10,8 @@ from hume_decisions.audio_helpers import iter_audio_chunks
 _MPEG1 = 3
 _MPEG2 = 2
 _MPEG25 = 0
+
+_ASSETS = pathlib.Path(__file__).parent / "assets"
 
 
 def _frame(
@@ -292,3 +295,36 @@ def test_chunk_duration_just_long_enough_for_the_frames_needed_advances_a_frame_
     assert [c.data for c in chunks] == [b"".join(frames[:11])] + [
         b"".join(frames[n - 10 : n + 1]) for n in range(11, 100)
     ]
+
+
+@pytest.mark.parametrize(
+    ("name", "times"),
+    [
+        pytest.param(
+            "tone_mpeg1_32k.mp3",
+            [(0, 972), (792, 1764), (1548, 2520), (2304, 3276), (3060, 4032), (3816, 4068)],
+            id="MPEG-1",
+        ),
+        pytest.param(
+            "tone_mpeg25_8k.mp3",
+            [(0, 936), (648, 1584), (1296, 2232), (1872, 2808), (2448, 3384), (2952, 3888), (3456, 4176)],
+            id="MPEG-2.5",
+        ),
+    ],
+)
+def test_encoded_mp3_chunks_decode_to_the_same_audio_as_the_whole_file(
+    name: str, times: typing.List[typing.Tuple[int, int]]
+) -> None:
+    # The files were encoded with ffmpeg's libmp3lame from a tone mixed with noise, at a bitrate low
+    # enough that almost every frame stores audio data in earlier frames. Decoding each of these
+    # chunks with ffmpeg gives exactly the samples of decoding the whole file, over the chunk's new
+    # frames. With fewer frames repeated, the times change and the decoded audio does not match.
+    recording = (_ASSETS / name).read_bytes()
+
+    chunks = list(iter_audio_chunks(recording, chunk_ms=1000))
+
+    assert [(c.start_ms, c.end_ms) for c in chunks] == times
+    first_frame = recording.index(chunks[0].data)
+    assert b"Info" in recording[:first_frame]
+    # The file ends with a 128-byte ID3v1 tag.
+    assert recording.index(chunks[-1].data) + len(chunks[-1].data) == len(recording) - 128

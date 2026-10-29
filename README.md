@@ -82,16 +82,16 @@ Each question is keyed by an ID you choose, and its model names its primitive, w
 | `noul` | `Question_Noul` | Whether something is true of the audio. | Optional. A `NoulCriteria` with what counts as `true` and as `false`. |
 | `choice` | `Question_Choice` | Which of several options applies. | Two or more `Criterion` options, each with a unique `name` and an optional `description`. |
 | `score` | `Question_Score` | Where the audio falls on an ordered scale. | Two or more levels, from lowest to highest. |
-| `span` | `Question_Span` | When an event occurs. | None. |
+| `moment` | `Question_Moment` | When an event occurs. | None. |
 
 ```python
-from hume_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Noul, Question_Score, Question_Span
+from hume_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Moment, Question_Noul, Question_Score
 
 request = DecisionsRequest(
     context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
     questions={
         "talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?"),
-        "interruptions": Question_Span(instructions="When does the agent interrupt the caller?"),
+        "interruptions": Question_Moment(instructions="When does the agent interrupt the caller?"),
         "agent_naturalness": Question_Score(
             instructions="How natural does the agent sound?",
             criteria=["Not at all", "2", "3", "4", "Extremely"],
@@ -119,10 +119,10 @@ All the questions in a request are answered in one model inference, so an answer
 | `noul` | `Answer_Noul` | `noul`, the share of raters who would answer yes. |
 | `choice` | `Answer_Choice` | `choice`, the option most raters would choose; `probabilities`, keyed by option name; and `confidence`. |
 | `score` | `Answer_Score` | `score`, the mean level; `probabilities` and `legend`, keyed by level index as a string; and `confidence`. |
-| `span` | `Answer_Span` | `spans`, each with `audio_start_ms`, `audio_end_ms`, and `probability`. An empty list means the event was not found. |
+| `moment` | `Answer_Moment` | `moments`, each with `audio_start_ms`, `audio_end_ms`, and `probability`. An empty list means the event was not found. |
 
 ```python
-from hume_decisions import Answer_Choice, Answer_Noul, Answer_Score, Answer_Span
+from hume_decisions import Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
 
 for question_id, answer in response.answers.items():
     if isinstance(answer, Answer_Noul):
@@ -131,12 +131,12 @@ for question_id, answer in response.answers.items():
         print(f"{question_id}: {answer.choice}, confidence {answer.confidence:.2f}")
     elif isinstance(answer, Answer_Score):
         print(f"{question_id}: {answer.score:.2f} of {len(answer.legend) - 1}, confidence {answer.confidence:.2f}")
-    elif isinstance(answer, Answer_Span):
-        for span in answer.spans:
-            print(f"{question_id}: {span.audio_start_ms} to {span.audio_end_ms} ms, {span.probability:.2f}")
+    elif isinstance(answer, Answer_Moment):
+        for moment in answer.moments:
+            print(f"{question_id}: {moment.audio_start_ms} to {moment.audio_end_ms} ms, {moment.probability:.2f}")
 ```
 
-`confidence` measures how much raters would agree, not how certain the model is. A `span` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
+`confidence` measures how much raters would agree, not how certain the model is. A `moment` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
 
 ## Counting input tokens
 
@@ -175,6 +175,11 @@ asyncio.run(main())
 
 `decisions.create_chunked` splits a recording longer than 5 minutes into chunks and sends each chunk as a separate `create` request, so each chunk has its own `run_id` and is billed on its own. The answers are not combined across chunks: you get one response per chunk.
 
+`chunk_ms` sets the length of each chunk and has no default, because it decides how many requests the job sends. A recording is sent as its duration divided by `chunk_ms` requests, rounded up: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
+
+1. Use 300000, the longest chunk the API accepts, for the fewest requests.
+2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers one minute.
+
 ```python
 from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment
 
@@ -200,7 +205,7 @@ for chunk in result.chunks:
             print(f"{chunk.start_ms + moment.audio_start_ms} to {chunk.start_ms + moment.audio_end_ms} ms")
 ```
 
-Every request asks the same questions with the same context, and `request_options` applies to each one. `chunk_ms` sets the length of each chunk, up to 300000, and `start_ms` and `end_ms` limit the job to part of the recording. Each chunk's `start_ms` and `end_ms` give where it actually starts and ends in the recording, so add the chunk's `start_ms` to a moment's times to place the moment in the recording.
+Every request asks the same questions with the same context, and `request_options` applies to each one. `start_ms` and `end_ms` limit the job to part of the recording. Each chunk's `start_ms` and `end_ms` give where it actually starts and ends in the recording, so add the chunk's `start_ms` to a moment's times to place the moment in the recording.
 
 The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
 
@@ -215,7 +220,37 @@ Chunks are sent one at a time, in order, and a failed request does not raise. It
 
 To resume a job that stopped, call `create_chunked` again with `start_ms` set to the `end_ms` of the chunk before the one that stopped it.
 
-`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way, for example several at a time with the async client:
+The whole recording is read into memory before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB.
+
+`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way.
+
+`create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it had received are lost, although they were billed. To keep each response as it arrives, send the chunks yourself and save each response before sending the next chunk:
+
+```python
+from hume_decisions import DecisionsClient, DecisionsRequest, Error, Question_Moment
+from hume_decisions.audio_helpers import iter_audio_chunks
+from hume_decisions.core import ApiError
+
+client = DecisionsClient()
+request = DecisionsRequest(
+    questions={"agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?")},
+)
+
+with open("long_call.wav", "rb") as audio:
+    chunks = iter_audio_chunks(audio, chunk_ms=300_000)
+for chunk in chunks:
+    try:
+        response = client.decisions.create(file=("long_call.wav", chunk.data, "audio/wav"), request=request)
+    except ApiError as error:
+        # Only a chunk that cannot be decoded fails on its own. Any other error would fail the remaining chunks too.
+        if isinstance(error.body, Error) and error.body.code == "audio_decode_failed":
+            continue
+        raise
+    with open(f"chunk_{chunk.index}_{chunk.start_ms}.json", "w") as saved:
+        saved.write(response.json())
+```
+
+You can also send several chunks at a time with the async client:
 
 ```python
 import asyncio

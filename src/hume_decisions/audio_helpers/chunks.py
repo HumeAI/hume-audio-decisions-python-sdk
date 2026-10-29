@@ -69,6 +69,11 @@ def iter_audio_chunks(
 
     `start_ms` and `end_ms` on each chunk give where it actually starts and ends.
 
+    The whole recording is read into memory and checked before this function returns, so that a
+    file that cannot be split is rejected before any chunk is produced. Each chunk's `data` is a
+    copy, made as the chunk is produced, so keeping every chunk, as `list()` does, holds the
+    recording in memory twice.
+
     Parameters
     ----------
     file : core.File
