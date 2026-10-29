@@ -141,8 +141,4 @@ def _with_content(file: File, data: bytes) -> File:
     # Each chunk is uploaded with the filename, content type and headers the caller gave the file.
     if not isinstance(file, tuple):
         return data
-    if len(file) == 2:
-        return (file[0], data)
-    if len(file) == 3:
-        return (file[0], data, file[2])
-    return (file[0], data, file[2], file[3])
+    return (file[0], data, *file[2:])
