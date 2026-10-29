@@ -37,17 +37,15 @@ Keep API keys on a server. To use the API from a web page, relay through your se
 
 ## Preparing audio
 
-Each request takes one audio file, MP3 or WAV, up to 5 minutes long. To evaluate several recordings, send one request per file. To evaluate a longer recording, split it into chunks as described in [Long recordings](#long-recordings).
+Each request takes one MP3 or WAV file up to 5 minutes long. Send one request per recording, and split a longer recording as described in [Long recordings](#long-recordings).
 
-The model hears audio at 16 kHz in one channel. The API resamples every file to 16 kHz and mixes its channels into one before the model processes it, so a higher sample rate or a second channel adds nothing the model can hear. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods below. `downmix_strategy` sets how:
+The model hears audio at 16 kHz in one channel: the API resamples every file and mixes its channels into one before the model processes it. To make uploads smaller, the SDK does the same to a WAV file before sending it, in `create` and in the chunked methods. `downmix_strategy` sets how:
 
-1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz with the filter the API uses, and mixes two channels into one the way the API does, so the model hears the same audio, apart from rounding. A mixed file is sent as 32-bit floating point, so loud audio cannot clip. A file with more than two channels is resampled but keeps its channels, because the API weighs them by speaker position.
-2. `"first_channel"` resamples the same way but keeps only the first channel, so the model hears only that channel.
+1. `"mix"`, the default, resamples audio above 16 kHz to 16 kHz and mixes two channels into one the way the API does, so the model hears the same audio apart from rounding. The mixed file is sent as 32-bit floating point, so it cannot clip. A file with more than two channels is only resampled, because the API weighs those channels by speaker position.
+2. `"first_channel"` resamples the same way and keeps only the first channel. Use it to judge one speaker of a call who is on the first channel; for any other channel, send that channel as its own file.
 3. `None` sends the file as it is.
 
-Mono WAV at 16 kHz or below is sent as it is with every strategy. MP3 files are always sent as they are, because they are already compressed, and so is a WAV file the SDK cannot read, such as a compressed WAV, which the API may still decode. `with_raw_response.create` sends every file as it is.
-
-Because the channels are mixed into one, to judge one speaker in a call alone, send that speaker's channel as its own file, or pass `downmix_strategy="first_channel"` for a WAV file that has that speaker on its first channel.
+MP3 files, mono WAV at 16 kHz or below, and WAV files the SDK cannot read, such as compressed WAV, are always sent as they are, and so is every file sent with `with_raw_response.create`.
 
 ## Quickstart
 
@@ -81,7 +79,7 @@ for question_id, answer in response.answers.items():
         print(f"{question_id}: mean level {answer.score:.2f}, most often {answer.legend[most_likely]!r}")
 ```
 
-The tuple gives the file part a filename and a content type; for an MP3 file, pass `audio/mpeg`. The response returns each answer under the ID you gave its question, with the `run_id` of the model run that produced the answers. A probability estimates the share of human raters who would give that answer, so a `noul` near 0.5 means raters would split on the audio, not that the model is unsure. `score` is the mean level, counted from 0, and `legend` maps each level index back to the text you gave it. The [Python quickstart](https://dev.hume.ai/decisions/docs/quickstart/python) walks through the request and the response.
+The tuple sets the file part's filename and content type; for an MP3 file, pass `audio/mpeg`. Each answer comes back under the ID you gave its question, with the `run_id` of the model run that produced the answers. A probability estimates the share of human raters who would give that answer, so a `noul` near 0.5 means raters would split, not that the model is unsure. `score` is the mean level, counted from 0, and `legend` maps each level index to the text you gave it. The [Python quickstart](https://dev.hume.ai/decisions/docs/quickstart/python) walks through the request and the response.
 
 ## Questions
 
@@ -171,12 +169,7 @@ asyncio.run(main())
 
 ## Long recordings
 
-`decisions.create_chunked` never sends the recording to the model as one file. It cuts the recording into chunks no longer than `max_chunk_ms` and sends each chunk to the API in its own `create` request. The model processes each chunk independently: it hears only that chunk, knows nothing of the chunks before or after it, and answers every question about that chunk alone. Each chunk gets its own response with its own `run_id` and is billed on its own. Nothing combines the answers across chunks, so you get one response per chunk.
-
-`max_chunk_ms` sets the longest a chunk can be and has no default, because it decides how many requests the job sends. The recording is cut into the fewest chunks that fit, of equal length, so the last chunk is not a short remainder: a 32-minute call at 300000 ms is cut into 7 chunks of about 4 minutes 34 seconds, not 6 of 5 minutes and 1 of 2 minutes. Pass `split="fixed"` when chunks must be the same length in every recording, for example to count per 5 minutes across calls: every chunk is then `max_chunk_ms` long except the last, which holds what remains and is billed for the context and questions like any other. A WAV recording is sent as its duration divided by `max_chunk_ms` requests, rounded up, as long as a chunk that long fits the API's size limit below: a 32-minute call takes 7 requests at 300000 ms and 32 at 60000 ms. An MP3 recording can take more requests, because each chunk holds only whole frames and starts with frames repeated from the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated frames, so they can add several. Each request is billed for its own audio, context and questions, so the context and questions are billed once per chunk.
-
-1. Use 300000, the longest chunk the API accepts, for the fewest requests. A WAV chunk must also fit the API's limit of 25,000,000 bytes per request, which 5 minutes of WAV fits only at just under 80,000 bytes per second. With the default `downmix_strategy`, 5 minutes of mono or stereo WAV fits in every sample format, except mono 64-bit floating point above about 10 kHz. A WAV file that does not fit is cut into shorter chunks that do, so 16-bit stereo sent with `downmix_strategy=None` is cut into chunks of at most 136054 ms at 44.1 kHz, and at most 124999 ms at 48 kHz. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits before it sends anything.
-2. Use shorter chunks when you want answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers at most one minute.
+`decisions.create_chunked` cuts a recording into chunks no longer than `max_chunk_ms` and sends each chunk in its own `create` request, one at a time and in order, with the same questions, context, and `request_options`. The model hears only the chunk it answers about, and each chunk gets its own response, `run_id`, and bill. Nothing combines the answers across chunks.
 
 ```python
 from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
@@ -207,14 +200,31 @@ for chunk in result.chunks:
             print(f"{chunk.start_ms + moment.audio_start_ms} to {chunk.start_ms + moment.audio_end_ms} ms")
 ```
 
-Every request asks the same questions with the same context, and `request_options` applies to each one. `start_ms` and `end_ms` limit the job to part of the recording. Each chunk's `start_ms` and `end_ms` give where it actually starts and ends in the recording, so add the chunk's `start_ms` to a moment's times to place the moment in the recording.
+Each chunk's `start_ms` and `end_ms` give where it starts and ends in the recording, so add its `start_ms` to a moment's times to place the moment in the recording. Pass `start_ms` and `end_ms` to `create_chunked` to send only part of the recording.
 
-Because the model answers about each chunk as if it were the whole recording, write the context and questions to hold for any part of the call:
+### Chunk length
+
+`max_chunk_ms` has no default, because it decides how many requests the job sends, and each request is billed for its own audio, context, and questions.
+
+1. Use 300000, the longest chunk the API accepts, for the fewest requests.
+2. Use shorter chunks for answers about shorter stretches of the call. A `noul` or `score` answer describes its whole chunk, so with 60000 ms chunks each answer covers at most one minute.
+
+By default, the recording is cut into the fewest chunks that fit, of equal length, so the last chunk is not a short remainder: a 32-minute call at 300000 ms becomes 7 chunks of about 4 minutes 34 seconds, not 6 of 5 minutes and 1 of 2 minutes. Pass `split="fixed"` when chunks must be the same length in every recording, for example to count per 5 minutes across calls. Every chunk is then `max_chunk_ms` long except the last, which holds what remains and is billed like any other.
+
+A WAV recording takes its duration divided by `max_chunk_ms` requests, rounded up: a 32-minute call takes 7 at 300000 ms and 32 at 60000 ms. Each chunk must also fit the API's limit of 25,000,000 bytes per request. With the default `downmix_strategy`, 5 minutes of mono or stereo WAV fits in every sample format, except mono 64-bit floating point above about 10 kHz. A file that does not fit is cut into shorter chunks that do, so 16-bit stereo sent with `downmix_strategy=None` is cut into chunks of at most 136054 ms at 44.1 kHz and 124999 ms at 48 kHz. With `split="fixed"`, `create_chunked` instead raises a `ValueError` naming the largest `max_chunk_ms` that fits, before it sends anything.
+
+An MP3 recording can take more requests, because each chunk repeats a little audio from the chunk before, as described under [Where cuts fall](#where-cuts-fall). At 300000 ms this adds at most one request for recordings shorter than several hours, and only when the recording is at or just under a multiple of 5 minutes. Shorter chunks lose a larger share to repeated audio, so they can add several.
+
+### Writing questions for chunks
+
+The model answers about each chunk as if it were the whole recording, so write the context and questions to hold for any part of the call:
 
 1. Describe in the context what is true throughout the call, such as who is speaking and what the call is for. A detail about one part of the call, such as "the agent speaks first", is true of the first chunk only, and in every other chunk it describes audio the model cannot hear.
 2. Ask about what can be heard within a single chunk. "Does the agent talk over the caller?" can be answered from any stretch of the call. "Is the caller's appointment rescheduled by the end of the call?" cannot, because the end of the call is in only one chunk.
 
-Each answer describes only its own chunk, and the answers are not combined for you, because the right way to combine them depends on the question. To ask whether something happens anywhere in the call, for example, take the highest `noul` across the chunks:
+### Combining answers
+
+The answers are not combined for you, because the right way to combine them depends on the question. To ask whether something happens anywhere in the call, take the highest `noul` across the chunks:
 
 ```python
 from hume_decisions import Answer_Noul
@@ -225,28 +235,32 @@ if result.complete:
     print(f"In the chunk most likely to show it, {highest:.0%} of raters would say the agent talks over the caller.")
 ```
 
-To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once each moment's times have its chunk's `start_ms` added, but an MP3 chunk repeats a little audio from the end of the chunk before, so a moment just after a cut can also appear at the end of the previous chunk.
+To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once its times are placed in the recording.
 
-Each chunk is evaluated on its own audio, so an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk on either side. A `moment` question can return it as two shorter moments, as one moment that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. This applies to both formats. The frames an MP3 chunk repeats from the chunk before are there so the chunk can be decoded, so they cannot be relied on to cover an event at a cut.
+### Where cuts fall
 
-The audio is cut without being decoded or re-encoded, so cuts fall where the format allows:
+1. A WAV file is cut between samples, after it is mixed down.
+2. An MP3 file is cut between frames, without being decoded, so chunks can differ in length by a frame or more; a frame lasts 24 to 72 ms. A frame can depend on the frames before it, so every chunk after the first starts with frames repeated from the end of the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. They count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so a moment near a cut can appear in both chunks. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0.
 
-1. A WAV file is cut between samples, after it is mixed down as `downmix_strategy` sets.
-2. An MP3 file is cut between frames, which last 24 to 72 ms, so chunks can differ in length by a frame or more. A frame can depend on the frames before it, so every chunk after the first also starts with frames repeated from the end of the previous chunk. That is usually a few frames, and up to about 2 seconds at the lowest bitrates. The repeated frames count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so answers about the start of a chunk can describe audio the previous chunk also covered. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0, which keeps the chunk's `start_ms` plus a moment's time correct.
+In both formats, an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk. A `moment` question can return it as two shorter moments, as one that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. The frames an MP3 chunk repeats are there so it can be decoded, and cannot be relied on to cover an event at a cut.
 
-Chunks are sent one at a time, in order, and a request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it has received, so check `result.complete` before relying on the result.
+### Failures and resuming
 
-1. A chunk whose audio cannot be decoded (`audio_decode_failed`) fails on its own, and the remaining chunks are still sent, as long as an earlier chunk succeeded. If no chunk has succeeded yet, the whole file is the likely cause, so the job stops.
+A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk, and `create_chunked` returns the responses it received, so check `result.complete` before relying on the result.
+
+1. A chunk whose audio cannot be decoded (`audio_decode_failed`) fails on its own, and the remaining chunks are still sent, as long as an earlier chunk succeeded. Until one has, the whole file is the likely cause, so the job stops.
 2. Any other error stops the job, such as running out of tokens (402), an invalid request, or a dropped connection. The chunks after it have the status `not_attempted`: no request was sent for them, so they were not billed.
 3. Rate limits and server errors are retried first, as for any request, so they stop the job only once the retries run out. Pass `max_retries` in `request_options` to allow more.
 
-To resume a job that stopped, call `create_chunked` again with `start_ms` set to `result.resume_ms`, which is where the chunk before the one that stopped the job ends, and with the same `end_ms`. The new job sends the audio of the chunk that stopped the job and the chunks after it, in no more chunks than the stopped job had left. Chunks that failed before the stop because their audio could not be decoded are not sent again, so the new job's `complete` covers only the range it sent. Its first chunk starts where the stopped chunk started, but with the default `split="even"`, the cuts after it are spread over the remaining range and can fall a few MP3 frames or a millisecond of WAV from the stopped job's. `resume_ms` is `None` when no chunk stopped the job. For a WAV file, a chunk's `start_ms` is rounded to the millisecond, so the resumed job can start up to half a millisecond from where that chunk ended, skipping or repeating a few samples.
+To resume a job that stopped, call `create_chunked` again with `start_ms=result.resume_ms` and the same `end_ms`. `resume_ms` is where the chunk before the one that stopped the job ends, or `None` when no chunk stopped the job. The new job sends the audio of the chunk that stopped the job and everything after it, in no more chunks than the stopped job had left. It does not resend earlier chunks that failed because their audio could not be decoded, so its `complete` covers only the range it sent. With the default `split="even"`, its cuts after the first chunk can fall a few MP3 frames or a millisecond of WAV from the stopped job's. A WAV chunk's `start_ms` is rounded to the millisecond, so the resumed job can skip or repeat a few samples where it starts.
 
-The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and its mixed-down copy adds about 230 MB.
+### Memory
 
-`iter_audio_chunks` in `hume_decisions.audio_helpers` does the splitting on its own, for MP3 and WAV files, mixing a WAV file down the same way, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way.
+The whole recording is read into memory, and a WAV file is mixed down, before the first request, so a file that cannot be split is rejected before anything is billed. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, plus about 230 MB for the mixed-down copy.
 
-`create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it had received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
+### Saving results as they arrive
+
+`create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
 
 ```python
 from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
@@ -265,11 +279,18 @@ with open("long_call.wav", "rb") as audio:
                 saved.write(chunk.response.json())
 ```
 
-To resume a job run with `iter_create_chunked`, keep the results it yields. When a chunk stopped the job, `ChunkedDecisionsResult(tuple(results), start_ms=start_ms).resume_ms` gives where to resume, as for `create_chunked`, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and the `start_ms` the job was given. When your process stopped instead, no chunk stopped the job and `resume_ms` is `None`, so resume at the `end_ms` of the last chunk you have a result for, not at the `start_ms` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have. In both cases, pass the same `end_ms` as the job that stopped. Chunks before the resume point that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.
+To resume such a job, keep the results it yields.
+
+1. When a chunk stopped the job, `ChunkedDecisionsResult(tuple(results), start_ms=start_ms).resume_ms` gives where to resume, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and the `start_ms` the job was given.
+2. When your process stopped instead, `resume_ms` is `None`. Resume at the `end_ms` of the last chunk you have a result for, not at the `start_ms` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
+
+In both cases, pass the same `end_ms` as the job that stopped. Chunks that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.
 
 With `AsyncDecisionsClient`, iterate with `async for`. The async iterator reads the recording when iteration starts, so keep the file open while iterating.
 
-You can also send several chunks at a time with the async client:
+### Sending chunks yourself
+
+`iter_audio_chunks` in `hume_decisions.audio_helpers` cuts a recording the same way, mixdown included, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way, such as several at a time with the async client:
 
 ```python
 import asyncio
