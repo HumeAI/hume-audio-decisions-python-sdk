@@ -133,7 +133,7 @@ client.decisions.create(
 <dl>
 <dd>
 
-Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 </dd>
 </dl>
 </dd>
