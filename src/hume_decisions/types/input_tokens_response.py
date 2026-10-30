@@ -13,7 +13,7 @@ class InputTokensResponse(UniversalBaseModel):
 
     input_tokens: int = pydantic.Field()
     """
-    The number of input tokens the request would be billed for, counted by Hume from the audio duration, the context, and each question's text, options and type.
+    The number of input tokens the request would be billed for.
     """
 
     if IS_PYDANTIC_V2:
