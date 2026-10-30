@@ -200,11 +200,7 @@ class RawDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[InputTokensResponse]:
         """
-        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
-
-        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
-
-        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------
@@ -492,11 +488,7 @@ class AsyncRawDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[InputTokensResponse]:
         """
-        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
-
-        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
-
-        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------

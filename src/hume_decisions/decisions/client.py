@@ -132,11 +132,7 @@ class DecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> InputTokensResponse:
         """
-        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
-
-        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
-
-        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------
@@ -158,17 +154,49 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_decisions import DecisionsClient, Question_Noul
+        from hume_decisions import (
+            Criterion,
+            DecisionsClient,
+            Question_Choice,
+            Question_Moment,
+            Question_Noul,
+            Question_Score,
+        )
 
         client = DecisionsClient(
             api_key="YOUR_API_KEY",
         )
         client.decisions.input_tokens(
-            audio_duration_ms=1,
+            audio_duration_ms=135000,
+            context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
             questions={
-                "whispered": Question_Noul(
-                    instructions="Is the voice whispering?",
-                )
+                "talks_over_caller": Question_Noul(
+                    instructions="Does the agent talk over the caller?",
+                ),
+                "agent_tone": Question_Choice(
+                    instructions="Which best describes the tone of the agent?",
+                    criteria=[
+                        Criterion(
+                            name="warm",
+                            description="Warm and friendly toward the caller",
+                        ),
+                        Criterion(
+                            name="neutral",
+                            description="Polite but impersonal",
+                        ),
+                        Criterion(
+                            name="curt",
+                            description="Short or dismissive with the caller",
+                        ),
+                    ],
+                ),
+                "agent_naturalness": Question_Score(
+                    instructions="How natural does the agent sound?",
+                    criteria=["Not at all", "2", "3", "4", "Extremely"],
+                ),
+                "agent_glitches": Question_Moment(
+                    instructions="Where does the agent glitch, slur or sound robotic?",
+                ),
             },
         )
         """
@@ -510,11 +538,7 @@ class AsyncDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> InputTokensResponse:
         """
-        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
-
-        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
-
-        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------
@@ -538,7 +562,14 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_decisions import AsyncDecisionsClient, Question_Noul
+        from hume_decisions import (
+            AsyncDecisionsClient,
+            Criterion,
+            Question_Choice,
+            Question_Moment,
+            Question_Noul,
+            Question_Score,
+        )
 
         client = AsyncDecisionsClient(
             api_key="YOUR_API_KEY",
@@ -547,11 +578,36 @@ class AsyncDecisionsClient:
 
         async def main() -> None:
             await client.decisions.input_tokens(
-                audio_duration_ms=1,
+                audio_duration_ms=135000,
+                context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
                 questions={
-                    "whispered": Question_Noul(
-                        instructions="Is the voice whispering?",
-                    )
+                    "talks_over_caller": Question_Noul(
+                        instructions="Does the agent talk over the caller?",
+                    ),
+                    "agent_tone": Question_Choice(
+                        instructions="Which best describes the tone of the agent?",
+                        criteria=[
+                            Criterion(
+                                name="warm",
+                                description="Warm and friendly toward the caller",
+                            ),
+                            Criterion(
+                                name="neutral",
+                                description="Polite but impersonal",
+                            ),
+                            Criterion(
+                                name="curt",
+                                description="Short or dismissive with the caller",
+                            ),
+                        ],
+                    ),
+                    "agent_naturalness": Question_Score(
+                        instructions="How natural does the agent sound?",
+                        criteria=["Not at all", "2", "3", "4", "Extremely"],
+                    ),
+                    "agent_glitches": Question_Moment(
+                        instructions="Where does the agent glitch, slur or sound robotic?",
+                    ),
                 },
             )
 
