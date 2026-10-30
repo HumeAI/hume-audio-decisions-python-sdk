@@ -121,6 +121,104 @@ client.decisions.create(
 </dl>
 </details>
 
+<details><summary><code>client.decisions.<a href="src/hume_decisions/decisions/client.py">input_tokens</a>(...) -> InputTokensResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
+
+The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
+
+Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from hume_decisions import DecisionsClient, Question_Noul
+from hume_decisions.environment import DecisionsClientEnvironment
+
+client = DecisionsClient(
+    api_key="<value>",
+    environment=DecisionsClientEnvironment.PRODUCTION,
+)
+
+client.decisions.input_tokens(
+    audio_duration_ms=1,
+    questions={
+        "whispered": Question_Noul(
+            instructions="Is the voice whispering?",
+        )
+    },
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**audio_duration_ms:** `int` — The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**questions:** `Questions` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**context:** `typing.Optional[str]` — Background information the model considers alongside the audio, such as the setting or who is speaking.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 ## runs
 <details><summary><code>client.runs.<a href="src/hume_decisions/runs/client.py">list</a>(...) -> RunsPage</code></summary>
 <dl>
