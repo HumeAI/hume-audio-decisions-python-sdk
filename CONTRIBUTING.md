@@ -73,6 +73,15 @@ Some of the SDK is written by hand rather than generated:
 
 Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/custom` fail if the client methods, the `numpy` dependency or the ffmpeg install step are missing, while nothing fails if the build and publish jobs are lost.
 
+### Merging Pull Requests
+
+Pull requests are merged by squash or rebase. The method decides what Fern Replay keeps: it records each commit since the last generation that changes generated files as a patch of its own, and it treats commits credited to Fern's bot as generated output.
+
+1. Squash-merge a pull request that changes generated files, so that Replay records the change as one patch on top of the current generation.
+2. Squash-merge a regeneration pull request, which Fern opens from a `fern-bot/` branch, when it passes as Fern opened it.
+3. When a regeneration drops or breaks a change, push the fix to the regeneration branch as a commit of its own and rebase-merge the pull request. Rebasing keeps the fix as your commit, which Replay records at the next regeneration. Squashing would fold it into a commit that GitHub can credit to Fern's bot, and the next regeneration would lose it.
+4. When a regeneration pull request reports a conflict, resolve it on the regeneration branch and run `fern replay resolve`, which records the resolved changes in `.fern/replay.lock` and commits them. Push that commit, and the pull request can then be squash-merged.
+
 ### How to Customize
 
 If you need to customize the SDK, you have two options:
@@ -127,9 +136,11 @@ This project uses automated code formatting and linting. Run `poetry run ruff fo
 
 If you have questions or run into issues:
 
-1. Check the [Fern documentation](https://buildwithfern.com)
-2. Search existing [GitHub issues](https://github.com/fern-api/fern/issues)
+1. Check the [Hume Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
+2. Search existing [issues in this repository](https://github.com/HumeAI/hume-decisions-python-sdk/issues)
 3. Open a new issue if your question hasn't been addressed
+
+For questions about how Fern generates the SDK, see the [Fern documentation](https://buildwithfern.com).
 
 ## License
 
