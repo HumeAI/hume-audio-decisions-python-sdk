@@ -136,7 +136,7 @@ This project uses automated code formatting and linting. Run `poetry run ruff fo
 
 If you have questions or run into issues:
 
-1. Check the [Hume Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
+1. Check the [Hume Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
 2. Search existing [issues in this repository](https://github.com/HumeAI/hume-decisions-python-sdk/issues)
 3. Open a new issue if your question hasn't been addressed
 
