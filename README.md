@@ -167,6 +167,21 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Counting input tokens
+
+`decisions.input_tokens` counts the input tokens a decisions request would be billed for, from its context, its questions, and the duration of its audio. It takes no audio file, so you can count a request before sending it.
+
+```python
+count = client.decisions.input_tokens(
+    audio_duration_ms=135_000,
+    context=request.context,
+    questions=request.questions,
+)
+print(f"{count.input_tokens} input tokens")
+```
+
+`audio_duration_ms` is the duration of the file the request would send. A duration over 5 minutes is rejected with `audio_too_long`, so count a long recording one chunk at a time; each chunk is billed as its own request.
+
 ## Long recordings
 
 `decisions.create_chunked` cuts a recording into chunks no longer than `max_chunk_ms` and sends each chunk in its own `create` request, one at a time and in order, with the same questions, context, and `request_options`. The model hears only the chunk it answers about, and each chunk gets its own response, `run_id`, and bill. Nothing combines the answers across chunks.
