@@ -8,12 +8,12 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class InputTokensResponse(UniversalBaseModel):
     """
-    The number of input tokens a decisions request would be billed for.
+    The estimated number of input tokens for a decisions request.
     """
 
     input_tokens: int = pydantic.Field()
     """
-    The number of input tokens the request would be billed for.
+    The estimated number of input tokens for the request.
     """
 
     if IS_PYDANTIC_V2:

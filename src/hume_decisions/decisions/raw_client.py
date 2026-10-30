@@ -200,7 +200,7 @@ class RawDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[InputTokensResponse]:
         """
-        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+        Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------
@@ -218,7 +218,7 @@ class RawDecisionsClient:
         Returns
         -------
         HttpResponse[InputTokensResponse]
-            The number of input tokens the request would be billed for.
+            The estimated number of input tokens for the request.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v0/decisions/file/input_tokens",
@@ -488,7 +488,7 @@ class AsyncRawDecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[InputTokensResponse]:
         """
-        Counts the input tokens a decisions request would be billed for. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+        Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
 
         Parameters
         ----------
@@ -506,7 +506,7 @@ class AsyncRawDecisionsClient:
         Returns
         -------
         AsyncHttpResponse[InputTokensResponse]
-            The number of input tokens the request would be billed for.
+            The estimated number of input tokens for the request.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v0/decisions/file/input_tokens",

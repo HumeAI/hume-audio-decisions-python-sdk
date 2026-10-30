@@ -8,7 +8,7 @@
       "class_name": "DecisionsClient"
     }
   },
-  "originGitCommit": "9da3d9746cfda8d101ce7c9fd43fc1339c2d9546",
+  "originGitCommit": "c35a39875be6a19ec7206bb922db47dde9cebb87",
   "originGitCommitIsDirty": false,
   "invokedBy": "ci",
   "requestedVersion": "0.1.0",
