@@ -200,8 +200,23 @@ def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
 
 
 def _ffmpeg(file: bytes, *options: str) -> Samples:
+    # ffmpeg's x86 code reads one more filter tap than its C code when it interpolates between filter
+    # phases, so its output at such rates depends on the CPU. Clearing the CPU flags runs the C code.
     output = subprocess.run(
-        [typing.cast(str, _FFMPEG), "-nostdin", "-v", "error", "-i", "-", *options, "-f", "f64le", "-"],
+        [
+            typing.cast(str, _FFMPEG),
+            "-nostdin",
+            "-v",
+            "error",
+            "-cpuflags",
+            "0",
+            "-i",
+            "-",
+            *options,
+            "-f",
+            "f64le",
+            "-",
+        ],
         input=file,
         capture_output=True,
         check=True,
