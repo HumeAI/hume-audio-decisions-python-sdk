@@ -1,7 +1,7 @@
+import os
 import pathlib
 import shutil
 import subprocess
-import typing
 
 import numpy as np
 import pytest
@@ -10,7 +10,6 @@ from _wav_files import Samples, read_wav, samples_wav
 from hume_decisions.audio_helpers import DownmixStrategy, iter_audio_chunks
 
 _ASSETS = pathlib.Path(__file__).parent / "assets"
-_FFMPEG = shutil.which("ffmpeg")
 _FORMATS = [(1, False), (2, False), (3, False), (4, False), (4, True), (8, True)]
 _FFMPEG_SCENARIOS = [
     (48000, 2, "mix", False),
@@ -165,7 +164,18 @@ def test_first_channel_copies_the_first_channel_above_16_khz_when_that_is_smalle
     assert np.array_equal(audio.samples, read_wav(file).samples[:, :1])
 
 
-@pytest.mark.skipif(_FFMPEG is None, reason="ffmpeg is not installed")
+@pytest.fixture
+def ffmpeg() -> str:
+    path = shutil.which("ffmpeg")
+    if path is None:
+        # CI installs ffmpeg in a step of a generated workflow, which regeneration can drop. Failing there
+        # rather than skipping keeps the comparison from silently no longer running.
+        if os.environ.get("CI"):
+            pytest.fail("ffmpeg is not installed, so the mixdown cannot be compared with the API's conversion.")
+        pytest.skip("ffmpeg is not installed")
+    return path
+
+
 @pytest.mark.parametrize(
     "sample_width, is_float, sample_rate, channels, strategy, loud",
     # Each scenario in 16-bit, and each other sample format in the first scenario. How the samples
@@ -174,7 +184,13 @@ def test_first_channel_copies_the_first_channel_above_16_khz_when_that_is_smalle
     + [(*sample_format, *_FFMPEG_SCENARIOS[0]) for sample_format in _FORMATS if sample_format != (2, False)],
 )
 def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
-    sample_width: int, is_float: bool, sample_rate: int, channels: int, strategy: DownmixStrategy, loud: bool
+    ffmpeg: str,
+    sample_width: int,
+    is_float: bool,
+    sample_rate: int,
+    channels: int,
+    strategy: DownmixStrategy,
+    loud: bool,
 ) -> None:
     frames = sample_rate * 2 + 3
     if loud:
@@ -190,8 +206,8 @@ def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
 
     # The API converts every file with `ffmpeg -i <file> -f f32le -ac 1 -ar 16000 -`.
     pick = ["-af", "pan=mono|c0=c0"] if strategy == "first_channel" else []
-    expected = _ffmpeg(file, *pick, "-ac", "1", "-ar", "16000")
-    heard = _ffmpeg(uploaded, "-ac", "1", "-ar", "16000")
+    expected = _ffmpeg(ffmpeg, file, *pick, "-ac", "1", "-ar", "16000")
+    heard = _ffmpeg(ffmpeg, uploaded, "-ac", "1", "-ar", "16000")
     # ffmpeg can leave out the last output sample.
     assert len(heard) - len(expected) in (0, 1)
     # Both are rounded to 32-bit floating point, which may differ by a few of its steps at the loudest sample.
@@ -199,12 +215,12 @@ def test_audio_reaches_the_model_as_it_does_through_the_apis_ffmpeg_conversion(
     assert np.abs(heard[: len(expected)] - expected).max() <= 5 * steps
 
 
-def _ffmpeg(file: bytes, *options: str) -> Samples:
+def _ffmpeg(ffmpeg: str, file: bytes, *options: str) -> Samples:
     # ffmpeg's x86 code reads one more filter tap than its C code when it interpolates between filter
     # phases, so its output at such rates depends on the CPU. Clearing the CPU flags runs the C code.
     output = subprocess.run(
         [
-            typing.cast(str, _FFMPEG),
+            ffmpeg,
             "-nostdin",
             "-v",
             "error",

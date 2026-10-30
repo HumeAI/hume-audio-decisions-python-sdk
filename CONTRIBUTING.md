@@ -71,7 +71,7 @@ Some of the SDK is written by hand rather than generated:
    2. The `numpy` dependency in `pyproject.toml`, `requirements.txt` and `poetry.lock`.
    3. The ffmpeg install step and the build and publish jobs in `.github/workflows/ci.yml`.
 
-Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/custom` fail if the client methods or the `numpy` dependency are missing, while nothing fails if the changes to `ci.yml` are lost.
+Regeneration rewrites the generated files. Fern Replay applies the committed changes to them again and records them in `.fern/replay.lock`, but check each regeneration for them. The tests in `tests/custom` fail if the client methods, the `numpy` dependency or the ffmpeg install step are missing, while nothing fails if the build and publish jobs are lost.
 
 ### How to Customize
 
