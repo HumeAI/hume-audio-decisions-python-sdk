@@ -12,6 +12,7 @@ from ..core.jsonable_encoder import jsonable_encoder
 from ..core.parse_error import ParsingError
 from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
+from ..core.serialization import convert_and_respect_annotation_metadata
 from ..errors.bad_request_error import BadRequestError
 from ..errors.content_too_large_error import ContentTooLargeError
 from ..errors.forbidden_error import ForbiddenError
@@ -25,6 +26,8 @@ from ..types.decisions_request import DecisionsRequest
 from ..types.decisions_response import DecisionsResponse
 from ..types.error import Error
 from ..types.gateway_error import GatewayError
+from ..types.input_tokens_response import InputTokensResponse
+from ..types.questions import Questions
 from pydantic import ValidationError
 
 # this is used as the default value for optional parameters
@@ -188,6 +191,140 @@ class RawDecisionsClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
+    def input_tokens(
+        self,
+        *,
+        audio_duration_ms: int,
+        questions: Questions,
+        context: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[InputTokensResponse]:
+        """
+        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
+
+        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
+
+        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+
+        Parameters
+        ----------
+        audio_duration_ms : int
+            The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+
+        questions : Questions
+
+        context : typing.Optional[str]
+            Background information the model considers alongside the audio, such as the setting or who is speaking.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[InputTokensResponse]
+            The number of input tokens the request would be billed for.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v0/decisions/file/input_tokens",
+            method="POST",
+            json={
+                "audio_duration_ms": audio_duration_ms,
+                "context": context,
+                "questions": convert_and_respect_annotation_metadata(
+                    object_=questions, annotation=Questions, direction="write"
+                ),
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    InputTokensResponse,
+                    parse_obj_as(
+                        type_=InputTokensResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 401:
+                raise UnauthorizedError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        GatewayError,
+                        parse_obj_as(
+                            type_=GatewayError,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 415:
+                raise UnsupportedMediaTypeError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        GatewayError,
+                        parse_obj_as(
+                            type_=GatewayError,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 500:
+                raise InternalServerError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
 
 class AsyncRawDecisionsClient:
     def __init__(self, *, client_wrapper: AsyncClientWrapper):
@@ -328,6 +465,140 @@ class AsyncRawDecisionsClient:
                 )
             if _response.status_code == 503:
                 raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def input_tokens(
+        self,
+        *,
+        audio_duration_ms: int,
+        questions: Questions,
+        context: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[InputTokensResponse]:
+        """
+        Counts the input tokens a decisions request would be billed for, without uploading or evaluating its audio. Send the `request` part of the decisions request as a JSON body, with `audio_duration_ms` for the audio file it would send. No run is recorded, so the response has no `run_id`.
+
+        The context and questions are validated as a decisions request's are, and fail with the same errors. The audio itself is not checked, so a request counted here can still be rejected by `POST /v0/decisions/file` for its audio file.
+
+        Hume counts input tokens from the audio duration, the context, and each question's text, options and type.
+
+        Parameters
+        ----------
+        audio_duration_ms : int
+            The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+
+        questions : Questions
+
+        context : typing.Optional[str]
+            Background information the model considers alongside the audio, such as the setting or who is speaking.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[InputTokensResponse]
+            The number of input tokens the request would be billed for.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v0/decisions/file/input_tokens",
+            method="POST",
+            json={
+                "audio_duration_ms": audio_duration_ms,
+                "context": context,
+                "questions": convert_and_respect_annotation_metadata(
+                    object_=questions, annotation=Questions, direction="write"
+                ),
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    InputTokensResponse,
+                    parse_obj_as(
+                        type_=InputTokensResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 401:
+                raise UnauthorizedError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        GatewayError,
+                        parse_obj_as(
+                            type_=GatewayError,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 415:
+                raise UnsupportedMediaTypeError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        GatewayError,
+                        parse_obj_as(
+                            type_=GatewayError,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 500:
+                raise InternalServerError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,
