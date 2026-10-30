@@ -65,7 +65,7 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `src/hume_decisions/audio_helpers` and `tests/custom`, which are listed in `.fernignore`.
+1. `src/hume_decisions/audio_helpers`, `tests/custom` and `LICENSE`, which are listed in `.fernignore`.
 2. These changes to generated files:
    1. In `src/hume_decisions/decisions/client.py`, the `downmix_strategy` parameter of `create` and the `iter_create_chunked` and `create_chunked` methods, in both `DecisionsClient` and `AsyncDecisionsClient`.
    2. The `numpy` dependency in `pyproject.toml`, `requirements.txt` and `poetry.lock`.
