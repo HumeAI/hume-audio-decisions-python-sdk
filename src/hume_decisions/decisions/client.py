@@ -4,6 +4,9 @@ import asyncio
 import typing
 
 from .. import core
+from ..audio_helpers import ChunkedDecisionsResult, ChunkResult, ChunkSplit, DownmixStrategy
+from ..audio_helpers._files import downmix_file
+from ..audio_helpers._results import iter_send_chunks, iter_send_chunks_async
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.decisions_request import DecisionsRequest
@@ -123,6 +126,191 @@ class DecisionsClient:
     def input_tokens(
         self,
         *,
+        audio_duration_ms: int,
+        questions: Questions,
+        context: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> InputTokensResponse:
+        """
+        Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+
+        Parameters
+        ----------
+        audio_duration_ms : int
+            The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+
+        questions : Questions
+
+        context : typing.Optional[str]
+            Background information the model considers alongside the audio, such as the setting or who is speaking.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        InputTokensResponse
+            The estimated number of input tokens for the request.
+
+        Examples
+        --------
+        from hume_decisions import (
+            Criterion,
+            DecisionsClient,
+            Question_Choice,
+            Question_Moment,
+            Question_Noul,
+            Question_Score,
+        )
+
+        client = DecisionsClient(
+            api_key="YOUR_API_KEY",
+        )
+        client.decisions.input_tokens(
+            audio_duration_ms=135000,
+            context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
+            questions={
+                "talks_over_caller": Question_Noul(
+                    instructions="Does the agent talk over the caller?",
+                ),
+                "agent_tone": Question_Choice(
+                    instructions="Which best describes the tone of the agent?",
+                    criteria=[
+                        Criterion(
+                            name="warm",
+                            description="Warm and friendly toward the caller",
+                        ),
+                        Criterion(
+                            name="neutral",
+                            description="Polite but impersonal",
+                        ),
+                        Criterion(
+                            name="curt",
+                            description="Short or dismissive with the caller",
+                        ),
+                    ],
+                ),
+                "agent_naturalness": Question_Score(
+                    instructions="How natural does the agent sound?",
+                    criteria=["Not at all", "2", "3", "4", "Extremely"],
+                ),
+                "agent_glitches": Question_Moment(
+                    instructions="Where does the agent glitch, slur or sound robotic?",
+                ),
+            },
+        )
+        """
+        _response = self._raw_client.input_tokens(
+            audio_duration_ms=audio_duration_ms, questions=questions, context=context, request_options=request_options
+        )
+        return _response.data
+
+    def iter_create_chunked(
+        self,
+        *,
+        request: DecisionsRequest,
+        file: core.File,
+        max_chunk_ms: int,
+        start_ms: typing.Optional[int] = None,
+        end_ms: typing.Optional[int] = None,
+        split: ChunkSplit = "even",
+        downmix_strategy: typing.Optional[DownmixStrategy] = "mix",
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> typing.Iterator[ChunkResult]:
+        """
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
+
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+
+        The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
+
+        A request the API rejects, or whose connection fails, does not raise. Its error is recorded on the chunk's result, so check each result's `status`. A chunk whose audio could not be decoded (`audio_decode_failed`) fails alone and the remaining chunks are still sent, but only once an earlier chunk has succeeded; before then, the whole file is the likely cause, so the job stops. Any other error stops the job, and the chunks after it are recorded as not attempted, with no request sent and nothing billed. Rate limits and server errors are retried first, as for `create`, so a job stops on them only once the retries set by `request_options` run out.
+
+        Parameters
+        ----------
+        request : DecisionsRequest
+            Sent unchanged with every chunk.
+
+        file : core.File
+            The recording, an MP3 or WAV file. Each chunk is uploaded with the filename, content type and headers given here.
+
+        max_chunk_ms : int
+            The longest a chunk can be, in milliseconds. `audio_helpers.iter_audio_chunks` gives its range and the
+            limit on the size of a WAV chunk.
+
+        start_ms : typing.Optional[int]
+            Where in the recording to start, in milliseconds. Defaults to the start of the recording.
+
+        end_ms : typing.Optional[int]
+            Where in the recording to stop, in milliseconds. Defaults to the end of the recording.
+
+        split : typing.Literal["even", "fixed"]
+            "even", the default, cuts the fewest chunks that fit, of equal length, so the last chunk is not a short
+            remainder. "fixed" makes every chunk `max_chunk_ms` long except the last, which holds what remains and is
+            billed like any other. `audio_helpers.iter_audio_chunks` describes both.
+
+        downmix_strategy : typing.Optional[typing.Literal["mix", "first_channel"]]
+            How a WAV file is mixed down before it is cut: "mix", the default, mixes it the way the API does, so the
+            model hears the same audio; "first_channel" keeps only the first channel; and None cuts it as it is. MP3
+            files are cut as they are. `audio_helpers.iter_audio_chunks` describes each.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration, applied to every chunk's request.
+
+        Yields
+        ------
+        ChunkResult
+            Each chunk's position in the recording and its response or error, in the order of the chunks.
+
+        Raises
+        ------
+        ValueError
+            The recording cannot be split as requested. This is raised by the call itself, before any request is sent.
+
+        TypeError
+            max_chunk_ms, start_ms or end_ms is not an integer, or is a bool. Like ValueError, this is raised before any
+            request is sent.
+
+        Examples
+        --------
+        from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+
+        client = DecisionsClient(
+            api_key="YOUR_API_KEY",
+        )
+        with open("call.mp3", "rb") as f:
+            for chunk in client.decisions.iter_create_chunked(
+                request=DecisionsRequest(
+                    questions={
+                        "agent_glitches": Question_Moment(
+                            instructions="Where does the agent glitch, slur or sound robotic?",
+                        ),
+                    },
+                ),
+                file=f,
+                max_chunk_ms=300_000,
+            ):
+                if chunk.response is not None:
+                    print(chunk.start_ms, chunk.response.run_id)
+                else:
+                    print(chunk.start_ms, chunk.status, chunk.error)
+        """
+        return iter_send_chunks(
+            # The chunks are mixed down when they are planned, so they are sent as they are.
+            lambda chunk: self.create(
+                request=request, file=chunk, downmix_strategy=None, request_options=request_options
+            ),
+            file,
+            max_chunk_ms=max_chunk_ms,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            split=split,
+            downmix_strategy=downmix_strategy,
+        )
+
+    def create_chunked(
+        self,
+        *,
         request: DecisionsRequest,
         file: core.File,
         max_chunk_ms: int,
@@ -133,7 +321,7 @@ class DecisionsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ChunkedDecisionsResult:
         """
-        Estimates the input tokens of a decisions request from its questions and the duration of its audio. The body takes the same `context` and `questions` as the `request` part of a `POST /v0/decisions/file` request, plus `audio_duration_ms`, the duration of the audio file in milliseconds.
+        Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing.
 
         Sends the chunks as `iter_create_chunked` does and returns once every chunk is done. If the process stops partway through, the responses already received are lost although they were billed, so use `iter_create_chunked` to keep each response as it arrives.
 
@@ -176,8 +364,8 @@ class DecisionsClient:
 
         Returns
         -------
-        InputTokensResponse
-            The estimated number of input tokens for the request.
+        ChunkedDecisionsResult
+            Each chunk's position in the recording and its response or error, in the order of the chunks.
 
         Raises
         ------
