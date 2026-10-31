@@ -1,6 +1,6 @@
-# Hume Audio Decisions Python SDK
+# Audio Decisions Python SDK
 
-The official Python client for the [Hume Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
+The official Python client for the [Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
 
 The SDK provides synchronous and asynchronous clients for the decisions and run endpoints, typed models for every question, answer, and response, and API key authentication.
 
@@ -20,7 +20,7 @@ Python 3.10 or later.
 ## Installation
 
 ```bash
-pip install hume-decisions
+pip install hume-audio-decisions
 ```
 
 ## Authentication
@@ -28,7 +28,7 @@ pip install hume-decisions
 Every request carries your API key in the `X-Hume-Api-Key` header. Pass the key to the client, or set the `HUME_API_KEY` environment variable and construct the client without arguments.
 
 ```python
-from hume_decisions import DecisionsClient
+from hume_audio_decisions import DecisionsClient
 
 client = DecisionsClient(api_key="YOUR_API_KEY")
 ```
@@ -52,7 +52,7 @@ MP3 files and WAV files the SDK cannot read, such as compressed WAV, are always 
 This request asks two questions about a simulated call with a voice AI agent: whether the agent talks over the caller, and how natural the agent sounds on a five-point scale.
 
 ```python
-from hume_decisions import Answer_Noul, Answer_Score, DecisionsClient, DecisionsRequest, Question_Noul, Question_Score
+from hume_audio_decisions import Answer_Noul, Answer_Score, DecisionsClient, DecisionsRequest, Question_Noul, Question_Score
 
 client = DecisionsClient()
 
@@ -93,7 +93,7 @@ Each question is keyed by an ID you choose, and its model names its primitive, w
 | `moment` | `Question_Moment` | When an event occurs. | None. |
 
 ```python
-from hume_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Moment, Question_Noul, Question_Score
+from hume_audio_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Moment, Question_Noul, Question_Score
 
 request = DecisionsRequest(
     context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
@@ -120,7 +120,7 @@ All the questions in a request are answered in one model inference, so an answer
 
 ## Reading answers
 
-`response.answers` maps each question ID to an answer whose model matches the question's primitive. Check the model with `isinstance`, which also lets a type checker narrow the answer to that model's fields. Every model is exported from `hume_decisions`.
+`response.answers` maps each question ID to an answer whose model matches the question's primitive. Check the model with `isinstance`, which also lets a type checker narrow the answer to that model's fields. Every model is exported from `hume_audio_decisions`.
 
 | Primitive | Model | Fields |
 |---|---|---|
@@ -130,7 +130,7 @@ All the questions in a request are answered in one model inference, so an answer
 | `moment` | `Answer_Moment` | `moments`, each with `audio_start_ms`, `audio_end_ms`, and `probability`. An empty list means the event was not found. |
 
 ```python
-from hume_decisions import Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
+from hume_audio_decisions import Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
 
 for question_id, answer in response.answers.items():
     if isinstance(answer, Answer_Noul):
@@ -153,7 +153,7 @@ for question_id, answer in response.answers.items():
 ```python
 import asyncio
 
-from hume_decisions import AsyncDecisionsClient
+from hume_audio_decisions import AsyncDecisionsClient
 
 
 async def main() -> None:
@@ -187,7 +187,7 @@ print(f"{count.input_tokens} input tokens")
 `decisions.create_chunked` cuts a recording into chunks no longer than `max_chunk_ms` and sends each chunk in its own `create` request, one at a time and in order, with the same questions, context, and `request_options`. The model hears only the chunk it answers about, and each chunk gets its own response, `run_id`, and bill. Nothing combines the answers across chunks.
 
 ```python
-from hume_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
+from hume_audio_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
 
 client = DecisionsClient()
 
@@ -242,7 +242,7 @@ The model answers about each chunk as if it were the whole recording, so write t
 The answers are not combined for you, because the right way to combine them depends on the question. To ask whether something happens anywhere in the call, take the highest `noul` across the chunks:
 
 ```python
-from hume_decisions import Answer_Noul
+from hume_audio_decisions import Answer_Noul
 
 if result.complete:
     answers = [response.answers["talks_over_caller"] for response in result.responses if response is not None]
@@ -278,7 +278,7 @@ The whole recording is read into memory, and a WAV file is mixed down, before th
 `create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
 
 ```python
-from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
 
 client = DecisionsClient()
 request = DecisionsRequest(
@@ -296,7 +296,7 @@ with open("long_call.wav", "rb") as audio:
 
 To resume such a job, keep the results it yields.
 
-1. When a chunk stopped the job, `ChunkedDecisionsResult(results, start_ms=start_ms).resume_ms` gives where to resume, with `ChunkedDecisionsResult` from `hume_decisions.audio_helpers` and the `start_ms` the job was given.
+1. When a chunk stopped the job, `ChunkedDecisionsResult(results, start_ms=start_ms).resume_ms` gives where to resume, with `ChunkedDecisionsResult` from `hume_audio_decisions.audio_helpers` and the `start_ms` the job was given.
 2. When your process stopped instead, `resume_ms` is `None`. Resume at the `end_ms` of the last chunk you have a result for, not at the `start_ms` of the chunk after it, which for an MP3 file includes frames repeated from the chunk you already have.
 
 In both cases, pass the same `end_ms` as the job that stopped. Chunks that failed because their audio could not be decoded are not sent again, including the last chunk you have a result for, so check your saved results for them.
@@ -305,13 +305,13 @@ With `AsyncDecisionsClient`, iterate with `async for`. The async iterator reads 
 
 ### Sending chunks yourself
 
-`iter_audio_chunks` in `hume_decisions.audio_helpers` cuts a recording the same way, mixdown included, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way, such as several at a time with the async client:
+`iter_audio_chunks` in `hume_audio_decisions.audio_helpers` cuts a recording the same way, mixdown included, and yields each chunk's bytes with its `start_ms` and `end_ms`. Use it to send chunks some other way, such as several at a time with the async client:
 
 ```python
 import asyncio
 
-from hume_decisions import AsyncDecisionsClient
-from hume_decisions.audio_helpers import iter_audio_chunks
+from hume_audio_decisions import AsyncDecisionsClient
+from hume_audio_decisions.audio_helpers import iter_audio_chunks
 
 
 async def main() -> None:
@@ -342,7 +342,7 @@ Sending several chunks at once reaches rate limits sooner, and a failure does no
 Every successful decisions request is recorded as a run, identified by the `run_id` of its response. The run endpoints return a run's status, when it started and ended, and the request it evaluated. They do not return answers, so keep the answers you need from the response.
 
 ```python
-from hume_decisions import DecisionsClient
+from hume_audio_decisions import DecisionsClient
 
 client = DecisionsClient()
 
@@ -358,10 +358,10 @@ print(run.status, list(run.request.questions))
 
 ## Errors
 
-The client raises `hume_decisions.core.ApiError` when a request fails. `status_code` holds the HTTP status, and `body` holds the error body. When the service answers, `body` is an `Error` whose `code` says what went wrong and whose `param` points to where the error was found, when there is one. Hume's API gateway answers some requests before they reach the service: a 401 for a missing or invalid credential, a 429 for a rate limit, and a 404 for a path or method the API does not serve. Those carry only a `message`, and a `request_id` when an API key was rejected.
+The client raises `hume_audio_decisions.core.ApiError` when a request fails. `status_code` holds the HTTP status, and `body` holds the error body. When the service answers, `body` is an `Error` whose `code` says what went wrong and whose `param` points to where the error was found, when there is one. Hume's API gateway answers some requests before they reach the service: a 401 for a missing or invalid credential, a 429 for a rate limit, and a 404 for a path or method the API does not serve. Those carry only a `message`, and a `request_id` when an API key was rejected.
 
 ```python
-from hume_decisions.core import ApiError
+from hume_audio_decisions.core import ApiError
 
 try:
     with open("test_call.wav", "rb") as audio:
@@ -376,8 +376,8 @@ The client retries a request that fails with a 408, 409, 429, or 5xx status up t
 
 ## Contributing
 
-Most of this SDK is generated by [Fern](https://buildwithfern.com) from the API definition, and edits to generated files are overwritten on the next generation. [CONTRIBUTING.md](https://github.com/HumeAI/hume-decisions-python-sdk/blob/main/CONTRIBUTING.md) explains how to build and test the project and how to add code that persists across regenerations. To report a problem, open an issue in this repository.
+Most of this SDK is generated by [Fern](https://buildwithfern.com) from the API definition, and edits to generated files are overwritten on the next generation. [CONTRIBUTING.md](https://github.com/HumeAI/hume-audio-decisions-python-sdk/blob/main/CONTRIBUTING.md) explains how to build and test the project and how to add code that persists across regenerations. To report a problem, open an issue in this repository.
 
 ## License
 
-[MIT](https://github.com/HumeAI/hume-decisions-python-sdk/blob/main/LICENSE)
+[MIT](https://github.com/HumeAI/hume-audio-decisions-python-sdk/blob/main/LICENSE)

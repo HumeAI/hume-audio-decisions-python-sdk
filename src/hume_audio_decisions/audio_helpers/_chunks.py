@@ -188,7 +188,7 @@ def iter_audio_chunks(
 
     Examples
     --------
-    from hume_decisions.audio_helpers import iter_audio_chunks
+    from hume_audio_decisions.audio_helpers import iter_audio_chunks
 
     with open("call.wav", "rb") as f:
         chunks = iter_audio_chunks(f, max_chunk_ms=60_000)

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from _wav_files import wav_file
 
-from hume_decisions.audio_helpers import iter_audio_chunks
+from hume_audio_decisions.audio_helpers import iter_audio_chunks
 
 
 def _raw_wav(

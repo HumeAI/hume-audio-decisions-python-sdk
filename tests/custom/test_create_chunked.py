@@ -13,7 +13,7 @@ import httpx
 import pytest
 from _wav_files import wav_file
 
-from hume_decisions import (
+from hume_audio_decisions import (
     AsyncDecisionsClient,
     BadRequestError,
     DecisionsClient,
@@ -22,14 +22,14 @@ from hume_decisions import (
     TooManyRequestsError,
     core,
 )
-from hume_decisions.audio_helpers import (
+from hume_audio_decisions.audio_helpers import (
     ChunkedDecisionsResult,
     ChunkResult,
     DownmixStrategy,
     _chunks,
     iter_audio_chunks,
 )
-from hume_decisions.core import ApiError
+from hume_audio_decisions.core import ApiError
 
 _ASSETS = pathlib.Path(__file__).parent / "assets"
 

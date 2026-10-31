@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-from hume_decisions.audio_helpers import ChunkSplit, iter_audio_chunks
+from hume_audio_decisions.audio_helpers import ChunkSplit, iter_audio_chunks
 
 _MPEG1 = 3
 _MPEG2 = 2

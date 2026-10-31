@@ -65,9 +65,9 @@ The following directories contain generated code:
 
 Some of the SDK is written by hand rather than generated:
 
-1. `src/hume_decisions/audio_helpers`, `tests/custom` and `LICENSE`, which are listed in `.fernignore`.
+1. `src/hume_audio_decisions/audio_helpers`, `tests/custom` and `LICENSE`, which are listed in `.fernignore`.
 2. These changes to generated files:
-   1. In `src/hume_decisions/decisions/client.py`, the `downmix_strategy` parameter of `create` and the `iter_create_chunked` and `create_chunked` methods, in both `DecisionsClient` and `AsyncDecisionsClient`.
+   1. In `src/hume_audio_decisions/decisions/client.py`, the `downmix_strategy` parameter of `create` and the `iter_create_chunked` and `create_chunked` methods, in both `DecisionsClient` and `AsyncDecisionsClient`.
    2. The `numpy` dependency in `pyproject.toml`, `requirements.txt` and `poetry.lock`.
    3. The ffmpeg install step and the build and publish jobs in `.github/workflows/ci.yml`.
 
@@ -136,8 +136,8 @@ This project uses automated code formatting and linting. Run `poetry run ruff fo
 
 If you have questions or run into issues:
 
-1. Check the [Hume Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
-2. Search existing [issues in this repository](https://github.com/HumeAI/hume-decisions-python-sdk/issues)
+1. Check the [Audio Decisions documentation](https://dev.hume.ai/decisions/docs/overview)
+2. Search existing [issues in this repository](https://github.com/HumeAI/hume-audio-decisions-python-sdk/issues)
 3. Open a new issue if your question hasn't been addressed
 
 For questions about how Fern generates the SDK, see the [Fern documentation](https://buildwithfern.com).

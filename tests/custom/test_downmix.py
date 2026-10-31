@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from _wav_files import Samples, read_wav, samples_wav
 
-from hume_decisions.audio_helpers import DownmixStrategy, iter_audio_chunks
+from hume_audio_decisions.audio_helpers import DownmixStrategy, iter_audio_chunks
 
 _ASSETS = pathlib.Path(__file__).parent / "assets"
 _FORMATS = [(1, False), (2, False), (3, False), (4, False), (4, True), (8, True)]
