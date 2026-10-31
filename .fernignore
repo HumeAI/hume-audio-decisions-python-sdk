@@ -5,5 +5,5 @@ LICENSE
 .fern/replay.lock
 .fern/replay.yml
 .gitattributes
-src/hume_decisions/audio_helpers
+src/hume_audio_decisions/audio_helpers
 tests/custom

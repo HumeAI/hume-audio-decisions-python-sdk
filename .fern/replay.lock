@@ -60,14 +60,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 28b8c892e602a34440f89650ddf72cc6b8bca1e6
+  - commit_sha: 8609c44c5499d23509056adbd4244e5032ee9083
+    tree_hash: 551cf30d002191338b32e00e84587a169f4008f3
+    timestamp: 2026-10-31T17:55:28.539Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: 8609c44c5499d23509056adbd4244e5032ee9083
 patches:
   - id: patch-95641ac3
     content_hash: sha256:66ac29d9f165c287787e3cae2237f381ee8bc84e7937a606eeb180e54792aa4b
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 28b8c892e602a34440f89650ddf72cc6b8bca1e6
+    base_generation: 8609c44c5499d23509056adbd4244e5032ee9083
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -261,7 +267,7 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 28b8c892e602a34440f89650ddf72cc6b8bca1e6
+    base_generation: 8609c44c5499d23509056adbd4244e5032ee9083
     files:
       - poetry.lock
       - pyproject.toml
@@ -383,7 +389,7 @@ patches:
       -content-hash = "4eaeff06fb8e558535aa3729ed6f99c2398eaaba665bcdf9c096bb08d9cb5fc6"
       +content-hash = "11f7ac01c981518d6ad586545714fc580711e7d33b4ce98ae820fc208311fc70"
       diff --git a/pyproject.toml b/pyproject.toml
-      index 25f37c5..cd0074f 100644
+      index cb121a1..2deddfb 100644
       --- a/pyproject.toml
       +++ b/pyproject.toml
       @@ -44,6 +44,7 @@ python = "^3.10"
@@ -2095,15 +2101,15 @@ patches:
         content-hash = "11f7ac01c981518d6ad586545714fc580711e7d33b4ce98ae820fc208311fc70"
       pyproject.toml: |
         [project]
-        name = "hume-decisions"
+        name = "hume-audio-decisions"
         dynamic = ["version"]
         license = "MIT"
         license-files = ["LICENSE"]
 
         [tool.poetry]
-        name = "hume-decisions"
+        name = "hume-audio-decisions"
         version = "0.1.0"
-        description = "A Python SDK for the Hume Audio Decisions API"
+        description = "A Python SDK for the Audio Decisions API"
         readme = "README.md"
         authors = []
         keywords = []
@@ -2127,13 +2133,13 @@ patches:
             "Typing :: Typed"
         ]
         packages = [
-            { include = "hume_decisions", from = "src"}
+            { include = "hume_audio_decisions", from = "src"}
         ]
 
         [tool.poetry.urls]
         Documentation = 'https://dev.hume.ai/decisions/docs/overview'
         Homepage = 'https://www.hume.ai/'
-        Repository = 'https://github.com/HumeAI/hume-decisions-python-sdk'
+        Repository = 'https://github.com/HumeAI/hume-audio-decisions-python-sdk'
 
         [tool.poetry.dependencies]
         python = "^3.10"
@@ -2208,7 +2214,7 @@ patches:
     original_commit: 99fd44c50397a33c8b17f61379e5ee56d8154288
     original_message: Make the range size test exercise the fixed split it defends, run the ffmpeg comparison over each scenario and each format once instead of every pair, move the mixdown tests into test_downmix, and install ffmpeg in CI so that comparison runs there
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 28b8c892e602a34440f89650ddf72cc6b8bca1e6
+    base_generation: 8609c44c5499d23509056adbd4244e5032ee9083
     files:
       - .github/workflows/ci.yml
     patch_content: |

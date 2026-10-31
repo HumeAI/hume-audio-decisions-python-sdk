@@ -33,11 +33,11 @@ class BaseClientWrapper:
         import platform
 
         headers: typing.Dict[str, str] = {
-            "User-Agent": "hume-decisions/0.1.0",
+            "User-Agent": "hume-audio-decisions/0.1.0",
             "X-Fern-Language": "Python",
             "X-Fern-Runtime": f"python/{platform.python_version()}",
             "X-Fern-Platform": f"{platform.system().lower()}/{platform.release()}",
-            "X-Fern-SDK-Name": "hume-decisions",
+            "X-Fern-SDK-Name": "hume-audio-decisions",
             "X-Fern-SDK-Version": "0.1.0",
             **(self.get_custom_headers() or {}),
         }

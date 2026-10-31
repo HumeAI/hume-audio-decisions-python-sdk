@@ -70,7 +70,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_decisions import (
+        from hume_audio_decisions import (
             Criterion,
             DecisionsClient,
             DecisionsRequest,
@@ -154,7 +154,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_decisions import (
+        from hume_audio_decisions import (
             Criterion,
             DecisionsClient,
             Question_Choice,
@@ -273,7 +273,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
 
         client = DecisionsClient(
             api_key="YOUR_API_KEY",
@@ -378,7 +378,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
 
         client = DecisionsClient(
             api_key="YOUR_API_KEY",
@@ -469,7 +469,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_decisions import (
+        from hume_audio_decisions import (
             AsyncDecisionsClient,
             Criterion,
             DecisionsRequest,
@@ -562,7 +562,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_decisions import (
+        from hume_audio_decisions import (
             AsyncDecisionsClient,
             Criterion,
             Question_Choice,
@@ -689,7 +689,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
 
         client = AsyncDecisionsClient(
             api_key="YOUR_API_KEY",
@@ -802,7 +802,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
 
         client = AsyncDecisionsClient(
             api_key="YOUR_API_KEY",

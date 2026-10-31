@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from hume_decisions.core.http_client import (
+from hume_audio_decisions.core.http_client import (
     AsyncHttpClient,
     HttpClient,
     _build_url,
@@ -18,7 +18,7 @@ from hume_decisions.core.http_client import (
     get_request_body,
     remove_none_from_dict,
 )
-from hume_decisions.core.request_options import RequestOptions
+from hume_audio_decisions.core.request_options import RequestOptions
 
 
 # Stub clients for testing HttpClient and AsyncHttpClient
@@ -392,7 +392,7 @@ def _make_async_http_client(mock_client: Any) -> AsyncHttpClient:
     )
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_retries_on_connect_error(mock_sleep: MagicMock) -> None:
     """Sync: connection error retries on httpx.ConnectError."""
     mock_client = MagicMock()
@@ -409,7 +409,7 @@ def test_sync_retries_on_connect_error(mock_sleep: MagicMock) -> None:
     mock_sleep.assert_called_once()
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_opt_in_retries_on_remote_protocol_error(mock_sleep: MagicMock) -> None:
     """Sync: ambiguous disconnect retries require an explicit opt-in."""
     mock_client = MagicMock()
@@ -426,7 +426,7 @@ def test_sync_opt_in_retries_on_remote_protocol_error(mock_sleep: MagicMock) -> 
     mock_sleep.assert_called_once()
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_connection_error_exhausts_retries(mock_sleep: MagicMock) -> None:
     """Sync: connection error exhausts retries then raises."""
     mock_client = MagicMock()
@@ -445,7 +445,7 @@ def test_sync_connection_error_exhausts_retries(mock_sleep: MagicMock) -> None:
     assert mock_sleep.call_count == 2
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_connection_error_respects_max_retries_zero(mock_sleep: MagicMock) -> None:
     """Sync: connection error respects max_retries=0."""
     mock_client = MagicMock()
@@ -465,7 +465,7 @@ def test_sync_connection_error_respects_max_retries_zero(mock_sleep: MagicMock) 
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_retries_on_connect_error(mock_sleep: AsyncMock) -> None:
     """Async: connection error retries on httpx.ConnectError."""
     mock_client = MagicMock()
@@ -485,7 +485,7 @@ async def test_async_retries_on_connect_error(mock_sleep: AsyncMock) -> None:
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_opt_in_retries_on_remote_protocol_error(mock_sleep: AsyncMock) -> None:
     """Async: ambiguous disconnect retries require an explicit opt-in."""
     mock_client = MagicMock()
@@ -507,7 +507,7 @@ async def test_async_opt_in_retries_on_remote_protocol_error(mock_sleep: AsyncMo
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_connection_error_exhausts_retries(mock_sleep: AsyncMock) -> None:
     """Async: connection error exhausts retries then raises."""
     mock_client = MagicMock()
@@ -573,7 +573,7 @@ def test_async_http_client_custom_base_max_retries() -> None:
     assert http_client.base_max_retries == 5
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_base_max_retries_zero_disables_retries(mock_sleep: MagicMock) -> None:
     """Sync: base_max_retries=0 disables retries when no request_options override."""
     mock_client = MagicMock()
@@ -595,7 +595,7 @@ def test_sync_base_max_retries_zero_disables_retries(mock_sleep: MagicMock) -> N
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_base_max_retries_zero_disables_retries(mock_sleep: AsyncMock) -> None:
     """Async: base_max_retries=0 disables retries when no request_options override."""
     mock_client = MagicMock()
@@ -616,7 +616,7 @@ async def test_async_base_max_retries_zero_disables_retries(mock_sleep: AsyncMoc
     mock_sleep.assert_not_called()
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_request_options_override_base_max_retries(mock_sleep: MagicMock) -> None:
     """Sync: request_options max_retries overrides base_max_retries."""
     mock_client = MagicMock()
@@ -646,7 +646,7 @@ def test_sync_request_options_override_base_max_retries(mock_sleep: MagicMock) -
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_request_options_override_base_max_retries(mock_sleep: AsyncMock) -> None:
     """Async: request_options max_retries overrides base_max_retries."""
     mock_client = MagicMock()
@@ -677,7 +677,7 @@ async def test_async_request_options_override_base_max_retries(mock_sleep: Async
     assert mock_client.request.call_count == 3
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_base_max_retries_used_as_default(mock_sleep: MagicMock) -> None:
     """Sync: base_max_retries is used when request_options has no max_retries."""
     mock_client = MagicMock()
@@ -703,7 +703,7 @@ def test_sync_base_max_retries_used_as_default(mock_sleep: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-@patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_async_base_max_retries_used_as_default(mock_sleep: AsyncMock) -> None:
     """Async: base_max_retries is used when request_options has no max_retries."""
     mock_client = MagicMock()
@@ -903,7 +903,7 @@ def test_parse_retry_after(headers: Dict[str, str], expected: Any) -> None:
     assert _parse_retry_after(httpx.Headers(headers)) == expected
 
 
-@patch("hume_decisions.core.http_client.time.sleep", return_value=None)
+@patch("hume_audio_decisions.core.http_client.time.sleep", return_value=None)
 def test_sync_retry_uses_retry_after_ms_header(mock_sleep: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.request.side_effect = [
@@ -929,7 +929,7 @@ async def test_async_retry_uses_retry_after_ms_header() -> None:
     )
     http_client = _make_async_http_client(mock_client)
 
-    with patch("hume_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("hume_audio_decisions.core.http_client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         response = await http_client.request(path="/test", method="GET")
 
     assert response.status_code == 200

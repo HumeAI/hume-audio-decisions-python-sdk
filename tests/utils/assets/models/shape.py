@@ -8,7 +8,7 @@ import typing
 
 import typing_extensions
 
-from hume_decisions.core.serialization import FieldMetadata
+from hume_audio_decisions.core.serialization import FieldMetadata
 
 
 class Base(typing_extensions.TypedDict):

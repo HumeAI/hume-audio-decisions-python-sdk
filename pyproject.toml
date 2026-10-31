@@ -1,13 +1,13 @@
 [project]
-name = "hume-decisions"
+name = "hume-audio-decisions"
 dynamic = ["version"]
 license = "MIT"
 license-files = ["LICENSE"]
 
 [tool.poetry]
-name = "hume-decisions"
+name = "hume-audio-decisions"
 version = "0.1.0"
-description = "A Python SDK for the Hume Audio Decisions API"
+description = "A Python SDK for the Audio Decisions API"
 readme = "README.md"
 authors = []
 keywords = []
@@ -31,13 +31,13 @@ classifiers = [
     "Typing :: Typed"
 ]
 packages = [
-    { include = "hume_decisions", from = "src"}
+    { include = "hume_audio_decisions", from = "src"}
 ]
 
 [tool.poetry.urls]
 Documentation = 'https://dev.hume.ai/decisions/docs/overview'
 Homepage = 'https://www.hume.ai/'
-Repository = 'https://github.com/HumeAI/hume-decisions-python-sdk'
+Repository = 'https://github.com/HumeAI/hume-audio-decisions-python-sdk'
 
 [tool.poetry.dependencies]
 python = "^3.10"
