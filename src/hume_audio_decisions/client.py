@@ -62,7 +62,7 @@ class DecisionsClient:
 
     Examples
     --------
-    from hume_decisions import DecisionsClient
+    from hume_audio_decisions import DecisionsClient
 
     client = DecisionsClient(
         api_key="YOUR_API_KEY",
@@ -187,7 +187,7 @@ class AsyncDecisionsClient:
 
     Examples
     --------
-    from hume_decisions import AsyncDecisionsClient
+    from hume_audio_decisions import AsyncDecisionsClient
 
     client = AsyncDecisionsClient(
         api_key="YOUR_API_KEY",

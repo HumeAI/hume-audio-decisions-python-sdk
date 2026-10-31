@@ -11,7 +11,7 @@ from .color import Color
 from .shape import ShapeParams
 from .undiscriminated_shape import UndiscriminatedShapeParams
 
-from hume_decisions.core.serialization import FieldMetadata
+from hume_audio_decisions.core.serialization import FieldMetadata
 
 
 class ObjectWithOptionalFieldParams(typing_extensions.TypedDict):

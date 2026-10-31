@@ -3,12 +3,12 @@
   "generatorName": "fernapi/fern-python-sdk",
   "generatorVersion": "5.41.9",
   "generatorConfig": {
-    "package_name": "hume_decisions",
+    "package_name": "hume_audio_decisions",
     "client": {
       "class_name": "DecisionsClient"
     }
   },
-  "originGitCommit": "c35a39875be6a19ec7206bb922db47dde9cebb87",
+  "originGitCommit": "1bbdc5f33b5fc8200c5189ce422b0542b20414cd",
   "originGitCommitIsDirty": false,
   "invokedBy": "ci",
   "requestedVersion": "0.1.0",

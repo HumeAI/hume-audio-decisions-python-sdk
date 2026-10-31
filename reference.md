@@ -1,6 +1,6 @@
 # Reference
 ## decisions
-<details><summary><code>client.decisions.<a href="src/hume_decisions/decisions/client.py">create</a>(...) -> DecisionsResponse</code></summary>
+<details><summary><code>client.decisions.<a href="src/hume_audio_decisions/decisions/client.py">create</a>(...) -> DecisionsResponse</code></summary>
 <dl>
 <dd>
 
@@ -29,8 +29,8 @@ All the questions in a request are answered in one model inference, so an answer
 <dd>
 
 ```python
-from hume_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
-from hume_decisions.environment import DecisionsClientEnvironment
+from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
+from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
     api_key="<value>",
@@ -121,7 +121,7 @@ client.decisions.create(
 </dl>
 </details>
 
-<details><summary><code>client.decisions.<a href="src/hume_decisions/decisions/client.py">input_tokens</a>(...) -> InputTokensResponse</code></summary>
+<details><summary><code>client.decisions.<a href="src/hume_audio_decisions/decisions/client.py">input_tokens</a>(...) -> InputTokensResponse</code></summary>
 <dl>
 <dd>
 
@@ -148,8 +148,8 @@ Estimates the input tokens of a decisions request from its questions and the dur
 <dd>
 
 ```python
-from hume_decisions import DecisionsClient, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
-from hume_decisions.environment import DecisionsClientEnvironment
+from hume_audio_decisions import DecisionsClient, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
+from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
     api_key="<value>",
@@ -247,7 +247,7 @@ client.decisions.input_tokens(
 </details>
 
 ## runs
-<details><summary><code>client.runs.<a href="src/hume_decisions/runs/client.py">list</a>(...) -> RunsPage</code></summary>
+<details><summary><code>client.runs.<a href="src/hume_audio_decisions/runs/client.py">list</a>(...) -> RunsPage</code></summary>
 <dl>
 <dd>
 
@@ -276,8 +276,8 @@ A run is one model inference. A successful decisions request is recorded as a ru
 <dd>
 
 ```python
-from hume_decisions import DecisionsClient
-from hume_decisions.environment import DecisionsClientEnvironment
+from hume_audio_decisions import DecisionsClient
+from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
     api_key="<value>",
@@ -360,7 +360,7 @@ client.runs.list()
 </dl>
 </details>
 
-<details><summary><code>client.runs.<a href="src/hume_decisions/runs/client.py">get</a>(...) -> Run</code></summary>
+<details><summary><code>client.runs.<a href="src/hume_audio_decisions/runs/client.py">get</a>(...) -> Run</code></summary>
 <dl>
 <dd>
 
@@ -387,8 +387,8 @@ The run's status, when it started and ended, the audio it received, and the requ
 <dd>
 
 ```python
-from hume_decisions import DecisionsClient
-from hume_decisions.environment import DecisionsClientEnvironment
+from hume_audio_decisions import DecisionsClient
+from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
     api_key="<value>",

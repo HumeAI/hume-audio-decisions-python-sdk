@@ -4,7 +4,7 @@
 
 import typing_extensions
 
-from hume_decisions.core.serialization import FieldMetadata
+from hume_audio_decisions.core.serialization import FieldMetadata
 
 
 class CircleParams(typing_extensions.TypedDict):
