@@ -1,17 +1,17 @@
 # Audio Decisions Python SDK
 
-The official Python client for the [Audio Decisions API](https://dev.hume.ai/decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
+The official Python client for the [Audio Decisions API](https://dev.hume.ai/audio-decisions/docs/overview). The API answers questions about audio that you write in plain language. Send a recording with your questions, and each answer comes back as probabilities that estimate how human raters would respond, which your code can threshold, rank, or combine.
 
 The SDK provides synchronous and asynchronous clients for the decisions and run endpoints, typed models for every question, answer, and response, and API key authentication.
 
-1. [Documentation](https://dev.hume.ai/decisions/docs/overview)
-2. [Python quickstart](https://dev.hume.ai/decisions/docs/quickstart/python)
-3. [Writing questions](https://dev.hume.ai/decisions/docs/writing-questions)
-4. [Primitives](https://dev.hume.ai/decisions/docs/primitives)
-5. [Interpreting answers](https://dev.hume.ai/decisions/docs/interpreting-answers)
-6. [Runs guide](https://dev.hume.ai/decisions/docs/runs)
-7. [Cookbooks](https://dev.hume.ai/decisions/cookbooks/overview)
-8. [API reference](https://dev.hume.ai/decisions/reference)
+1. [Documentation](https://dev.hume.ai/audio-decisions/docs/overview)
+2. [Python quickstart](https://dev.hume.ai/audio-decisions/docs/quickstart/python)
+3. [Writing questions](https://dev.hume.ai/audio-decisions/docs/writing-questions)
+4. [Primitives](https://dev.hume.ai/audio-decisions/docs/primitives)
+5. [Interpreting answers](https://dev.hume.ai/audio-decisions/docs/interpreting-answers)
+6. [Runs guide](https://dev.hume.ai/audio-decisions/docs/runs)
+7. [Cookbooks](https://dev.hume.ai/audio-decisions/cookbooks/overview)
+8. [API reference](https://dev.hume.ai/audio-decisions/reference)
 
 ## Requirements
 
@@ -33,7 +33,7 @@ from hume_audio_decisions import DecisionsClient
 client = DecisionsClient(api_key="YOUR_API_KEY")
 ```
 
-Keep API keys on a server. To use the API from a web page, relay through your server. See [Authentication](https://dev.hume.ai/decisions/docs/authentication).
+Keep API keys on a server. To use the API from a web page, relay through your server. See [Authentication](https://dev.hume.ai/audio-decisions/docs/authentication).
 
 ## Preparing audio
 
@@ -79,7 +79,7 @@ for question_id, answer in response.answers.items():
         print(f"{question_id}: mean level {answer.score:.2f}, most often {answer.legend[most_likely]!r}")
 ```
 
-The tuple sets the file part's filename and content type; for an MP3 file, pass `audio/mpeg`. Each answer comes back under the ID you gave its question, with the `run_id` of the model run that produced the answers. A probability estimates the share of human raters who would give that answer, so a `noul` near 0.5 means raters would split, not that the model is unsure. `score` is the mean level, counted from 0, and `legend` maps each level index to the text you gave it. The [Python quickstart](https://dev.hume.ai/decisions/docs/quickstart/python) walks through the request and the response.
+The tuple sets the file part's filename and content type; for an MP3 file, pass `audio/mpeg`. Each answer comes back under the ID you gave its question, with the `run_id` of the model run that produced the answers. A probability estimates the share of human raters who would give that answer, so a `noul` near 0.5 means raters would split, not that the model is unsure. `score` is the mean level, counted from 0, and `legend` maps each level index to the text you gave it. The [Python quickstart](https://dev.hume.ai/audio-decisions/docs/quickstart/python) walks through the request and the response.
 
 ## Questions
 
@@ -116,7 +116,7 @@ request = DecisionsRequest(
 )
 ```
 
-All the questions in a request are answered in one model inference, so an answer can change when other questions are added, removed, or reordered. Ask every question about a recording in one request, and to compare answers across recordings, send the same questions in the same order. [Writing questions](https://dev.hume.ai/decisions/docs/writing-questions) covers how to word instructions and criteria.
+All the questions in a request are answered in one model inference, so an answer can change when other questions are added, removed, or reordered. Ask every question about a recording in one request, and to compare answers across recordings, send the same questions in the same order. [Writing questions](https://dev.hume.ai/audio-decisions/docs/writing-questions) covers how to word instructions and criteria.
 
 ## Reading answers
 
@@ -144,7 +144,7 @@ for question_id, answer in response.answers.items():
             print(f"{question_id}: {moment.audio_start_ms} to {moment.audio_end_ms} ms, {moment.probability:.2f}")
 ```
 
-`confidence` measures how much raters would agree, not how certain the model is. A `moment` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
+`confidence` measures how much raters would agree, not how certain the model is. A `moment` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/audio-decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/audio-decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
 
 ## Async client
 
@@ -354,7 +354,7 @@ run = client.runs.get("019a1f3c-7d2e-7b41-9c58-2e6f4a1d8b03")
 print(run.status, list(run.request.questions))
 ```
 
-`runs.list` returns your organization's runs, newest first, one page at a time, and filters by `user_id`, `status`, `started_after`, and `started_before`. Pass a page's `next_cursor` back as `cursor`, with the same filters, to fetch the next one; the last page has none. The [runs guide](https://dev.hume.ai/decisions/docs/runs) covers run status and the filters.
+`runs.list` returns your organization's runs, newest first, one page at a time, and filters by `user_id`, `status`, `started_after`, and `started_before`. Pass a page's `next_cursor` back as `cursor`, with the same filters, to fetch the next one; the last page has none. The [runs guide](https://dev.hume.ai/audio-decisions/docs/runs) covers run status and the filters.
 
 ## Errors
 
@@ -372,7 +372,7 @@ except ApiError as error:
 
 The client retries a request that fails with a 408, 409, 429, or 5xx status up to 2 times, waiting as long as the response's `Retry-After` header asks when it has one. Pass `max_retries` to the client, or in `request_options` for one request, to change the limit. Requests time out after 60 seconds unless you pass a different `timeout` the same way.
 
-[Errors](https://dev.hume.ai/decisions/docs/errors) lists every code and whether to retry.
+[Errors](https://dev.hume.ai/audio-decisions/docs/errors) lists every code and whether to retry.
 
 ## Contributing
 
