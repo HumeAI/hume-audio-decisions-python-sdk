@@ -72,14 +72,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 6c8fdabe0f4e0d88dca6f4f4f460b0c0b93343d3
+  - commit_sha: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
+    tree_hash: d05ff91c4f85a2d8a09a25d60aa8bb69e462edbd
+    timestamp: 2026-11-01T09:28:48.927Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
 patches:
   - id: patch-95641ac3
     content_hash: sha256:66ac29d9f165c287787e3cae2237f381ee8bc84e7937a606eeb180e54792aa4b
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 6c8fdabe0f4e0d88dca6f4f4f460b0c0b93343d3
+    base_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -273,7 +279,7 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 6c8fdabe0f4e0d88dca6f4f4f460b0c0b93343d3
+    base_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
     files:
       - poetry.lock
       - pyproject.toml
@@ -395,7 +401,7 @@ patches:
       -content-hash = "4eaeff06fb8e558535aa3729ed6f99c2398eaaba665bcdf9c096bb08d9cb5fc6"
       +content-hash = "11f7ac01c981518d6ad586545714fc580711e7d33b4ce98ae820fc208311fc70"
       diff --git a/pyproject.toml b/pyproject.toml
-      index cb121a1..2deddfb 100644
+      index d01fc23..40c9541 100644
       --- a/pyproject.toml
       +++ b/pyproject.toml
       @@ -44,6 +44,7 @@ python = "^3.10"
@@ -2143,7 +2149,7 @@ patches:
         ]
 
         [tool.poetry.urls]
-        Documentation = 'https://dev.hume.ai/decisions/docs/overview'
+        Documentation = 'https://dev.hume.ai/audio-decisions/docs/overview'
         Homepage = 'https://www.hume.ai/'
         Repository = 'https://github.com/HumeAI/hume-audio-decisions-python-sdk'
 
@@ -2409,4 +2415,4 @@ patches:
                 with:
                   repository-url: https://upload.pypi.org/legacy/
     user_owned: true
-    status: resolving
+    status: unresolved
