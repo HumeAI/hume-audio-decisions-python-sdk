@@ -205,7 +205,7 @@ class RawDecisionsClient:
         Parameters
         ----------
         audio_duration_ms : int
-            The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+            The duration of the audio file the decisions request would send, in milliseconds. A duration under 5 seconds is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`.
 
         questions : Questions
 
@@ -270,6 +270,17 @@ class RawDecisionsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 413:
+                raise ContentTooLargeError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,
@@ -493,7 +504,7 @@ class AsyncRawDecisionsClient:
         Parameters
         ----------
         audio_duration_ms : int
-            The duration of the audio file the decisions request would send, in milliseconds. A duration over 5 minutes is rejected with `audio_too_long`.
+            The duration of the audio file the decisions request would send, in milliseconds. A duration under 5 seconds is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`.
 
         questions : Questions
 
@@ -558,6 +569,17 @@ class AsyncRawDecisionsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        Error,
+                        parse_obj_as(
+                            type_=Error,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 413:
+                raise ContentTooLargeError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         Error,

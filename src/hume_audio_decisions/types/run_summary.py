@@ -5,6 +5,7 @@ import typing
 
 import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .received import Received
 from .run_status import RunStatus
 
 
@@ -37,6 +38,11 @@ class RunSummary(UniversalBaseModel):
     bytes_received: int = pydantic.Field()
     """
     The size of the `file` part, in bytes.
+    """
+
+    received: typing.Optional[Received] = pydantic.Field(default=None)
+    """
+    What the run was billed: the decisions response's `received`. Absent for a run that was not billed.
     """
 
     if IS_PYDANTIC_V2:

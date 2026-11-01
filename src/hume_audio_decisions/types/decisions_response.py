@@ -5,11 +5,12 @@ import typing
 import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .answers import Answers
+from .received import Received
 
 
 class DecisionsResponse(UniversalBaseModel):
     """
-    The answer to each question, keyed by question ID, and the `run_id` of the model run that produced the answers.
+    The answer to each question, keyed by question ID, the `run_id` of the model run that produced the answers, and what the request is billed.
     """
 
     run_id: str = pydantic.Field()
@@ -18,6 +19,7 @@ class DecisionsResponse(UniversalBaseModel):
     """
 
     answers: Answers
+    received: Received
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
