@@ -52,7 +52,12 @@ def _parts(request: httpx.Request) -> typing.Dict[str, email.message.Message]:
 
 def _succeeded(number: int) -> httpx.Response:
     return httpx.Response(
-        200, json={"run_id": f"run-{number}", "answers": {"talks_over_caller": {"type": "noul", "noul": 0.5}}}
+        200,
+        json={
+            "run_id": f"run-{number}",
+            "answers": {"talks_over_caller": {"type": "noul", "noul": 0.5}},
+            "received": {"input_tokens": 100},
+        },
     )
 
 
