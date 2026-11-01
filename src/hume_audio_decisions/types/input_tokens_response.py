@@ -11,9 +11,9 @@ class InputTokensResponse(UniversalBaseModel):
     The estimated number of input tokens for a decisions request.
     """
 
-    input_tokens: int = pydantic.Field()
+    estimated_input_tokens: int = pydantic.Field()
     """
-    The estimated number of input tokens for the request.
+    The estimated number of input tokens for the request: what `POST /v0/decisions/file` would bill it, as its response's `received.input_tokens`. The estimate counts the audio from its duration rather than the file, so it can differ by a few tokens.
     """
 
     if IS_PYDANTIC_V2:

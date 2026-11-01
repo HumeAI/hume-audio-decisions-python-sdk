@@ -8,6 +8,7 @@ ErrorCode = typing.Union[
         "question_invalid",
         "audio_decode_failed",
         "audio_format_unsupported",
+        "audio_too_short",
         "audio_too_long",
         "invalid_request",
         "payment_required",
