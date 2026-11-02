@@ -90,16 +90,16 @@ Each question is keyed by an ID you choose, and its model names its primitive, w
 | `noul` | `Question_Noul` | Whether something is true of the audio. | Optional. A `NoulCriteria` with what counts as `true` and as `false`. |
 | `choice` | `Question_Choice` | Which of several options applies. | Two or more `Criterion` options, each with a unique `name` and an optional `description`. |
 | `score` | `Question_Score` | Where the audio falls on an ordered scale. | Two or more levels, from lowest to highest. |
-| `moment` | `Question_Moment` | When an event occurs. | None. |
+| `span` | `Question_Span` | When an event occurs. | None. |
 
 ```python
-from hume_audio_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Moment, Question_Noul, Question_Score
+from hume_audio_decisions import Criterion, DecisionsRequest, Question_Choice, Question_Noul, Question_Score, Question_Span
 
 request = DecisionsRequest(
     context="A simulated test call in which a voice AI agent helps a caller reschedule an appointment. Both voices are synthetic, and the agent speaks first.",
     questions={
         "talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?"),
-        "interruptions": Question_Moment(instructions="When does the agent interrupt the caller?"),
+        "interruptions": Question_Span(instructions="When does the agent interrupt the caller?"),
         "agent_naturalness": Question_Score(
             instructions="How natural does the agent sound?",
             criteria=["Not at all", "2", "3", "4", "Extremely"],
@@ -127,10 +127,10 @@ All the questions in a request are answered in one model inference, so an answer
 | `noul` | `Answer_Noul` | `noul`, the share of raters who would answer yes. |
 | `choice` | `Answer_Choice` | `choice`, the option most raters would choose; `probabilities`, keyed by option name; and `confidence`. |
 | `score` | `Answer_Score` | `score`, the mean level; `probabilities` and `legend`, keyed by level index as a string; and `confidence`. |
-| `moment` | `Answer_Moment` | `moments`, each with `audio_start_ms`, `audio_end_ms`, and `probability`. An empty list means the event was not found. |
+| `span` | `Answer_Span` | `spans`, each with `audio_start_ms`, `audio_end_ms`, and `probability`. An empty list means the event was not found. |
 
 ```python
-from hume_audio_decisions import Answer_Choice, Answer_Moment, Answer_Noul, Answer_Score
+from hume_audio_decisions import Answer_Choice, Answer_Noul, Answer_Score, Answer_Span
 
 for question_id, answer in response.answers.items():
     if isinstance(answer, Answer_Noul):
@@ -139,12 +139,12 @@ for question_id, answer in response.answers.items():
         print(f"{question_id}: {answer.choice}, confidence {answer.confidence:.2f}")
     elif isinstance(answer, Answer_Score):
         print(f"{question_id}: {answer.score:.2f} of {len(answer.legend) - 1}, confidence {answer.confidence:.2f}")
-    elif isinstance(answer, Answer_Moment):
-        for moment in answer.moments:
-            print(f"{question_id}: {moment.audio_start_ms} to {moment.audio_end_ms} ms, {moment.probability:.2f}")
+    elif isinstance(answer, Answer_Span):
+        for span in answer.spans:
+            print(f"{question_id}: {span.audio_start_ms} to {span.audio_end_ms} ms, {span.probability:.2f}")
 ```
 
-`confidence` measures how much raters would agree, not how certain the model is. A `moment` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/audio-decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/audio-decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
+`confidence` measures how much raters would agree, not how certain the model is. A `span` answer gives times but no share of raters, so to ask whether an event occurs as well as when, add a `noul` question. [Primitives](https://dev.hume.ai/audio-decisions/docs/primitives) defines every field, and [Interpreting answers](https://dev.hume.ai/audio-decisions/docs/interpreting-answers) covers setting thresholds for acting on them.
 
 ## Async client
 
@@ -187,7 +187,7 @@ print(f"{count.input_tokens} input tokens")
 `decisions.create_chunked` cuts a recording into chunks no longer than `max_chunk_ms` and sends each chunk in its own `create` request, one at a time and in order, with the same questions, context, and `request_options`. The model hears only the chunk it answers about, and each chunk gets its own response, `run_id`, and bill. Nothing combines the answers across chunks.
 
 ```python
-from hume_audio_decisions import Answer_Moment, DecisionsClient, DecisionsRequest, Question_Moment, Question_Noul
+from hume_audio_decisions import Answer_Span, DecisionsClient, DecisionsRequest, Question_Noul, Question_Span
 
 client = DecisionsClient()
 
@@ -197,7 +197,7 @@ with open("long_call.wav", "rb") as audio:
         request=DecisionsRequest(
             context="A call in which a voice AI agent helps a caller reschedule an appointment.",
             questions={
-                "agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?"),
+                "agent_glitches": Question_Span(instructions="Where does the agent glitch, slur or sound robotic?"),
                 "talks_over_caller": Question_Noul(instructions="Does the agent talk over the caller?"),
             },
         ),
@@ -209,13 +209,13 @@ for chunk in result.chunks:
         print(f"chunk {chunk.index} ({chunk.start_ms} to {chunk.end_ms} ms): {chunk.status}, {chunk.error}")
         continue
     answer = chunk.response.answers["agent_glitches"]
-    if isinstance(answer, Answer_Moment):
-        for moment in answer.moments:
-            # Moments are measured from the start of the chunk.
-            print(f"{chunk.start_ms + moment.audio_start_ms} to {chunk.start_ms + moment.audio_end_ms} ms")
+    if isinstance(answer, Answer_Span):
+        for span in answer.spans:
+            # Span times are measured from the start of the chunk.
+            print(f"{chunk.start_ms + span.audio_start_ms} to {chunk.start_ms + span.audio_end_ms} ms")
 ```
 
-Each chunk's `start_ms` and `end_ms` give where it starts and ends in the recording, so add its `start_ms` to a moment's times to place the moment in the recording. Pass `start_ms` and `end_ms` to `create_chunked` to send only part of the recording.
+Each chunk's `start_ms` and `end_ms` give where it starts and ends in the recording, so add its `start_ms` to a span's times to place the span in the recording. Pass `start_ms` and `end_ms` to `create_chunked` to send only part of the recording.
 
 ### Chunk length
 
@@ -250,14 +250,14 @@ if result.complete:
     print(f"In the chunk most likely to show it, {highest:.0%} of raters would say the agent talks over the caller.")
 ```
 
-To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `moment` answer needs no combining once its times are placed in the recording.
+To ask how much of the call something describes, count the chunks whose `noul` passes a threshold instead. A `span` answer needs no combining once its times are placed in the recording.
 
 ### Where cuts fall
 
 1. A WAV file is cut between samples, after it is mixed down.
-2. An MP3 file is cut between frames, without being decoded, so chunks can differ in length by a frame or more; a frame lasts 24 to 72 ms. A frame can depend on the frames before it, so every chunk after the first starts with frames repeated from the end of the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. They count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so a moment near a cut can appear in both chunks. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0.
+2. An MP3 file is cut between frames, without being decoded, so chunks can differ in length by a frame or more; a frame lasts 24 to 72 ms. A frame can depend on the frames before it, so every chunk after the first starts with frames repeated from the end of the chunk before, usually a fraction of a second and up to about 2 seconds at the lowest bitrates. They count toward `max_chunk_ms` and are included in the chunk's `start_ms`, so a span near a cut can appear in both chunks. Most MP3 files also start with a few tens of milliseconds of silence that the encoder added and players skip. Times are measured from where a player starts the file, so the first chunk's `start_ms` can be below 0.
 
-In both formats, an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk. A `moment` question can return it as two shorter moments, as one that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. The frames an MP3 chunk repeats are there so it can be decoded, and cannot be relied on to cover an event at a cut.
+In both formats, an event that crosses a cut, such as the agent talking over the caller for a second or two around it, is heard in part by each chunk. A `span` question can return it as two shorter spans, as one that ends or starts at the cut, or not at all, and a `noul` answer about it can come out lower in both chunks than for audio that holds the whole event. The frames an MP3 chunk repeats are there so it can be decoded, and cannot be relied on to cover an event at a cut.
 
 ### Failures and resuming
 
@@ -278,11 +278,11 @@ The whole recording is read into memory, and a WAV file is mixed down, before th
 `create_chunked` returns only once every chunk is done, so if your process stops partway through a long job, the responses it received are lost, although they were billed. `decisions.iter_create_chunked` cuts and sends the chunks the same way, but yields each chunk's result as soon as its request is done, so you can save each response before the next chunk is sent:
 
 ```python
-from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Span
 
 client = DecisionsClient()
 request = DecisionsRequest(
-    questions={"agent_glitches": Question_Moment(instructions="Where does the agent glitch, slur or sound robotic?")},
+    questions={"agent_glitches": Question_Span(instructions="Where does the agent glitch, slur or sound robotic?")},
 )
 
 with open("long_call.wav", "rb") as audio:
