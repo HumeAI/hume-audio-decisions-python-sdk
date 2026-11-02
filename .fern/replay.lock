@@ -90,14 +90,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
+  - commit_sha: 7295cb33a5dbcedb20a909abcafb87a30f4c3e20
+    tree_hash: 361aba87339243f503bcba85a2fb173f815d7872
+    timestamp: 2026-11-02T05:40:50.402Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: 7295cb33a5dbcedb20a909abcafb87a30f4c3e20
 patches:
   - id: patch-95641ac3
     content_hash: sha256:ecbb284f54fd971c1d2feb2f68f41444532870018d18870357031dea37b333b9
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
+    base_generation: 7295cb33a5dbcedb20a909abcafb87a30f4c3e20
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -291,7 +297,7 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
+    base_generation: 7295cb33a5dbcedb20a909abcafb87a30f4c3e20
     files:
       - poetry.lock
       - pyproject.toml
@@ -2238,7 +2244,7 @@ patches:
     original_commit: 389d2f823d531a5be9607f0a32a6e280d1173213
     original_message: Point the PyPI environment back at hume-audio-decisions, which a stale replay patch reverted to hume-decisions
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
+    base_generation: 7295cb33a5dbcedb20a909abcafb87a30f4c3e20
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -2426,6 +2432,7 @@ patches:
                 uses: pypa/gh-action-pypi-publish@release/v1
                 with:
                   repository-url: https://upload.pypi.org/legacy/
+    user_owned: true
 dismissals:
   - patch_id: patch-99fd44c5
     original_commit: 99fd44c50397a33c8b17f61379e5ee56d8154288
