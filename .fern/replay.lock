@@ -84,19 +84,25 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 6c41d344096009b472f4c832b9556aa0c5137339
+  - commit_sha: bffd64387f6ac45a1bccd40965114e2b9a39f458
+    tree_hash: fc2847fdbd329314a6a6ded0acf20c77bce76b5e
+    timestamp: 2026-11-02T02:28:24.029Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
 patches:
   - id: patch-95641ac3
-    content_hash: sha256:66ac29d9f165c287787e3cae2237f381ee8bc84e7937a606eeb180e54792aa4b
+    content_hash: sha256:ecbb284f54fd971c1d2feb2f68f41444532870018d18870357031dea37b333b9
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 6c41d344096009b472f4c832b9556aa0c5137339
+    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
     files:
       - .github/workflows/ci.yml
     patch_content: |
       diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-      index e343440..1d1a373 100644
+      index e343440..a5cb9cb 100644
       --- a/.github/workflows/ci.yml
       +++ b/.github/workflows/ci.yml
       @@ -36,6 +36,9 @@ jobs:
@@ -143,7 +149,7 @@ patches:
       +    runs-on: ubuntu-latest
       +    environment:
       +      name: pypi
-      +      url: https://pypi.org/p/hume-decisions
+      +      url: https://pypi.org/p/hume-audio-decisions
       +    permissions:
       +      contents: read   # Required for checkout
       +      id-token: write  # Required for OIDC
@@ -256,7 +262,7 @@ patches:
             runs-on: ubuntu-latest
             environment:
               name: pypi
-              url: https://pypi.org/p/hume-decisions
+              url: https://pypi.org/p/hume-audio-decisions
             permissions:
               contents: read   # Required for checkout
               id-token: write  # Required for OIDC
@@ -285,7 +291,7 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 6c41d344096009b472f4c832b9556aa0c5137339
+    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
     files:
       - poetry.lock
       - pyproject.toml
@@ -2422,3 +2428,196 @@ patches:
                   repository-url: https://upload.pypi.org/legacy/
     user_owned: true
     status: unresolved
+  - id: patch-389d2f82
+    content_hash: sha256:ecbb284f54fd971c1d2feb2f68f41444532870018d18870357031dea37b333b9
+    original_commit: 389d2f823d531a5be9607f0a32a6e280d1173213
+    original_message: Point the PyPI environment back at hume-audio-decisions, which a stale replay patch reverted to hume-decisions
+    original_author: zach <zachary.greathouse@hume.ai>
+    base_generation: bffd64387f6ac45a1bccd40965114e2b9a39f458
+    files:
+      - .github/workflows/ci.yml
+    patch_content: |
+      diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+      index e343440..a5cb9cb 100644
+      --- a/.github/workflows/ci.yml
+      +++ b/.github/workflows/ci.yml
+      @@ -36,6 +36,9 @@ jobs:
+                 curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+             - name: Install dependencies
+               run: poetry install
+      +      # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+      +      - name: Install ffmpeg
+      +        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+       
+             - name: Test
+               run: poetry run pytest -rP -n auto .
+      @@ -46,9 +49,8 @@ jobs:
+             - name: Test (aiohttp)
+               run: poetry run pytest -rP -n auto -m aiohttp .
+       
+      -  publish:
+      -    needs: [compile, test]
+      -    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      +  build:
+      +    name: Build distribution
+           runs-on: ubuntu-latest
+           steps:
+             - name: Checkout repo
+      @@ -62,10 +64,43 @@ jobs:
+                 curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+             - name: Install dependencies
+               run: poetry install
+      -      - name: Publish to pypi
+      +      - name: Build package
+      +        run: poetry build
+      +      - name: Store the distribution packages
+      +        uses: actions/upload-artifact@v4
+      +        with:
+      +          name: python-package-distributions
+      +          path: dist/
+      +
+      +  publish:
+      +    name: Publish to PyPI
+      +    needs: [compile, test, build]
+      +    # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+      +    # not release the package.
+      +    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      +    runs-on: ubuntu-latest
+      +    environment:
+      +      name: pypi
+      +      url: https://pypi.org/p/hume-audio-decisions
+      +    permissions:
+      +      contents: read   # Required for checkout
+      +      id-token: write  # Required for OIDC
+      +    steps:
+      +      - name: Download all the dists
+      +        uses: actions/download-artifact@v4
+      +        with:
+      +          name: python-package-distributions
+      +          path: dist/
+      +      # A published version can never be published again, so a tag on the wrong commit must fail
+      +      # here rather than release whatever version that commit holds.
+      +      - name: Check the tag matches the package version
+               run: |
+      -          poetry config repositories.remote https://upload.pypi.org/legacy/
+      -          poetry --no-interaction -v publish --build --repository remote --username "$PYPI_USERNAME" --password "$OIDC"
+      -        env:
+      -          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      -          OIDC: ${{ secrets.OIDC }}
+      +          PKG_VERSION=$(basename dist/*.whl | cut -d- -f2)
+      +          if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+      +            echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+      +            exit 1
+      +          fi
+      +      - name: Publish to pypi with attestations
+      +        uses: pypa/gh-action-pypi-publish@release/v1
+      +        with:
+      +          repository-url: https://upload.pypi.org/legacy/
+    theirs_snapshot:
+      .github/workflows/ci.yml: |
+        name: ci
+        on: [push]
+
+        concurrency:
+          group: ${{ github.workflow }}-${{ github.ref }}
+          cancel-in-progress: false
+
+        jobs:
+          compile:
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+              - name: Compile
+                run: poetry run mypy .
+          test:
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+              # The downmix tests compare the SDK's mixdown with ffmpeg's, which the API uses, and fail in CI without it.
+              - name: Install ffmpeg
+                run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+              - name: Test
+                run: poetry run pytest -rP -n auto .
+
+              - name: Install aiohttp extra
+                run: poetry install --extras aiohttp
+
+              - name: Test (aiohttp)
+                run: poetry run pytest -rP -n auto -m aiohttp .
+
+          build:
+            name: Build distribution
+            runs-on: ubuntu-latest
+            steps:
+              - name: Checkout repo
+                uses: actions/checkout@v4
+              - name: Set up python
+                uses: actions/setup-python@v4
+                with:
+                  python-version: "3.10"
+              - name: Bootstrap poetry
+                run: |
+                  curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
+              - name: Install dependencies
+                run: poetry install
+              - name: Build package
+                run: poetry build
+              - name: Store the distribution packages
+                uses: actions/upload-artifact@v4
+                with:
+                  name: python-package-distributions
+                  path: dist/
+
+          publish:
+            name: Publish to PyPI
+            needs: [compile, test, build]
+            # Only version tags publish. Fern pushes a tag of its own to this repository, and that tag must
+            # not release the package.
+            if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+            runs-on: ubuntu-latest
+            environment:
+              name: pypi
+              url: https://pypi.org/p/hume-audio-decisions
+            permissions:
+              contents: read   # Required for checkout
+              id-token: write  # Required for OIDC
+            steps:
+              - name: Download all the dists
+                uses: actions/download-artifact@v4
+                with:
+                  name: python-package-distributions
+                  path: dist/
+              # A published version can never be published again, so a tag on the wrong commit must fail
+              # here rather than release whatever version that commit holds.
+              - name: Check the tag matches the package version
+                run: |
+                  PKG_VERSION=$(basename dist/*.whl | cut -d- -f2)
+                  if [[ "${GITHUB_REF_NAME}" != "v${PKG_VERSION}" ]]; then
+                    echo "::error::Tag ${GITHUB_REF_NAME} does not match package version ${PKG_VERSION}."
+                    exit 1
+                  fi
+              - name: Publish to pypi with attestations
+                uses: pypa/gh-action-pypi-publish@release/v1
+                with:
+                  repository-url: https://upload.pypi.org/legacy/
