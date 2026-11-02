@@ -19,7 +19,7 @@ class ChoiceQuestion(UniversalBaseModel):
 
     criteria: typing.List[Criterion] = pydantic.Field()
     """
-    The options, presented to the model in the order listed. A question with fewer than two options or more than 100, or with duplicate names, is rejected with `question_invalid`.
+    The options, presented to the model in the order listed. A question with fewer than two options or more than 20, or with duplicate names, is rejected with `question_invalid`.
     """
 
     if IS_PYDANTIC_V2:
