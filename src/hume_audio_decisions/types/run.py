@@ -6,7 +6,7 @@ import typing
 import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .decisions_request import DecisionsRequest
-from .received import Received
+from .run_received import RunReceived
 from .run_status import RunStatus
 
 
@@ -36,16 +36,7 @@ class Run(UniversalBaseModel):
     When the run ended.
     """
 
-    bytes_received: int = pydantic.Field()
-    """
-    The size of the `file` part, in bytes.
-    """
-
-    received: typing.Optional[Received] = pydantic.Field(default=None)
-    """
-    What the run was billed: the decisions response's `received`. Absent for a run that was not billed.
-    """
-
+    received: RunReceived
     request: DecisionsRequest = pydantic.Field()
     """
     The `request` part the run evaluated: its `context` and `questions`, as sent.
