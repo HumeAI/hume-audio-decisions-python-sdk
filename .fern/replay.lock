@@ -78,14 +78,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
+  - commit_sha: 6c41d344096009b472f4c832b9556aa0c5137339
+    tree_hash: 0c0cd676a75c453134a32925c8e647e922110a7e
+    timestamp: 2026-11-02T00:10:30.595Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: 6c41d344096009b472f4c832b9556aa0c5137339
 patches:
   - id: patch-95641ac3
     content_hash: sha256:66ac29d9f165c287787e3cae2237f381ee8bc84e7937a606eeb180e54792aa4b
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
+    base_generation: 6c41d344096009b472f4c832b9556aa0c5137339
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -279,14 +285,14 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: ffc1b7ec37a288a4ced3e890ba53fa29728f2da9
+    base_generation: 6c41d344096009b472f4c832b9556aa0c5137339
     files:
       - poetry.lock
       - pyproject.toml
       - requirements.txt
     patch_content: |
       diff --git a/poetry.lock b/poetry.lock
-      index 3fed7cc..ce08e07 100644
+      index f336f01..22ba601 100644
       --- a/poetry.lock
       +++ b/poetry.lock
       @@ -1,4 +1,4 @@
@@ -656,14 +662,14 @@ patches:
 
         [[package]]
         name = "anyio"
-        version = "4.15.1"
+        version = "4.16.0"
         description = "High-level concurrency and networking framework on top of asyncio or Trio"
         optional = false
         python-versions = ">=3.10"
         groups = ["main"]
         files = [
-            {file = "anyio-4.15.1-py3-none-any.whl", hash = "sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101"},
-            {file = "anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94"},
+            {file = "anyio-4.16.0-py3-none-any.whl", hash = "sha256:c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026"},
+            {file = "anyio-4.16.0.tar.gz", hash = "sha256:59bb03251907983d1603d27c3087ddb1e93299ea2163adcdba37899a4fb12ffb"},
         ]
 
         [package.dependencies]
@@ -1722,19 +1728,19 @@ patches:
 
         [[package]]
         name = "pytest-asyncio"
-        version = "1.4.1"
+        version = "1.4.1.post1"
         description = "Pytest support for asyncio"
         optional = false
         python-versions = ">=3.10"
         groups = ["dev"]
         files = [
-            {file = "pytest_asyncio-1.4.1-py3-none-any.whl", hash = "sha256:507afa78ec77c6661164ef1a2368bc7820383fd1a14b2a7f813de8b5a92949cc"},
-            {file = "pytest_asyncio-1.4.1.tar.gz", hash = "sha256:e8266eb094e5ee9ffdb2068c9836f33e209ea77a970eb846933d416b5602669b"},
+            {file = "pytest_asyncio-1.4.1.post1-py3-none-any.whl", hash = "sha256:0755e488cc0a2b9bd2eab7292cc6390d4cbb8390f1020745647bae5a708e0165"},
+            {file = "pytest_asyncio-1.4.1.post1.tar.gz", hash = "sha256:f582d9ea4a1c082195abe8bd29a1fe106aeb1cd435e3dad2d3bc2749935c36a2"},
         ]
 
         [package.dependencies]
         backports-asyncio-runner = {version = ">=1.1,<2", markers = "python_version < \"3.11\""}
-        pytest = ">=8.4,<10"
+        pytest = ">=8.4"
         typing-extensions = {version = ">=4.12", markers = "python_version < \"3.13\""}
 
         [package.extras]
@@ -2415,4 +2421,4 @@ patches:
                 with:
                   repository-url: https://upload.pypi.org/legacy/
     user_owned: true
-    status: resolving
+    status: unresolved
