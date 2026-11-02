@@ -29,7 +29,7 @@ All the questions in a request are answered in one model inference, so an answer
 <dd>
 
 ```python
-from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
+from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Span
 from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
@@ -72,7 +72,7 @@ client.decisions.create(
                     "Extremely"
                 ],
             ),
-            "agent_glitches": Question_Moment(
+            "agent_glitches": Question_Span(
                 instructions="Where does the agent glitch, slur or sound robotic?",
             )
         },
@@ -148,7 +148,7 @@ Estimates the input tokens of a decisions request from its questions and the dur
 <dd>
 
 ```python
-from hume_audio_decisions import DecisionsClient, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Moment
+from hume_audio_decisions import DecisionsClient, Question_Noul, Question_Choice, Criterion, Question_Score, Question_Span
 from hume_audio_decisions.environment import DecisionsClientEnvironment
 
 client = DecisionsClient(
@@ -190,7 +190,7 @@ client.decisions.input_tokens(
                 "Extremely"
             ],
         ),
-        "agent_glitches": Question_Moment(
+        "agent_glitches": Question_Span(
             instructions="Where does the agent glitch, slur or sound robotic?",
         )
     },

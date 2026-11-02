@@ -6,24 +6,24 @@ import pydantic
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class Moment(UniversalBaseModel):
+class Span(UniversalBaseModel):
     """
-    A moment where the described event may occur.
+    A span where the described event may occur.
     """
 
     audio_start_ms: int = pydantic.Field()
     """
-    Where the moment begins, in milliseconds from the start of the audio file.
+    Where the span begins, in milliseconds from the start of the audio file.
     """
 
     audio_end_ms: int = pydantic.Field()
     """
-    Where the moment ends, in milliseconds from the start of the audio file.
+    Where the span ends, in milliseconds from the start of the audio file.
     """
 
     probability: float = pydantic.Field()
     """
-    The probability that the event occurs in the moment.
+    The probability that the event occurs in the span.
     """
 
     if IS_PYDANTIC_V2:
