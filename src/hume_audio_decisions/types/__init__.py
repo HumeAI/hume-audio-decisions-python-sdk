@@ -28,6 +28,7 @@ if typing.TYPE_CHECKING:
     from .questions import Questions
     from .received import Received
     from .run import Run
+    from .run_received import RunReceived
     from .run_status import RunStatus
     from .run_summary import RunSummary
     from .runs_page import RunsPage
@@ -64,6 +65,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "Questions": ".questions",
     "Received": ".received",
     "Run": ".run",
+    "RunReceived": ".run_received",
     "RunStatus": ".run_status",
     "RunSummary": ".run_summary",
     "RunsPage": ".runs_page",
@@ -124,6 +126,7 @@ __all__ = [
     "Questions",
     "Received",
     "Run",
+    "RunReceived",
     "RunStatus",
     "RunSummary",
     "RunsPage",
