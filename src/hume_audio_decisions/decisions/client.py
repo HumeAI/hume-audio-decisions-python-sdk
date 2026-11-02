@@ -220,7 +220,7 @@ class DecisionsClient:
         """
         Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
 
-        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A span's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
@@ -273,7 +273,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Span
 
         client = DecisionsClient(
             api_key="YOUR_API_KEY",
@@ -282,7 +282,7 @@ class DecisionsClient:
             for chunk in client.decisions.iter_create_chunked(
                 request=DecisionsRequest(
                     questions={
-                        "agent_glitches": Question_Moment(
+                        "agent_glitches": Question_Span(
                             instructions="Where does the agent glitch, slur or sound robotic?",
                         ),
                     },
@@ -325,7 +325,7 @@ class DecisionsClient:
 
         Sends the chunks as `iter_create_chunked` does and returns once every chunk is done. If the process stops partway through, the responses already received are lost although they were billed, so use `iter_create_chunked` to keep each response as it arrives.
 
-        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A span's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
@@ -378,7 +378,7 @@ class DecisionsClient:
 
         Examples
         --------
-        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import DecisionsClient, DecisionsRequest, Question_Span
 
         client = DecisionsClient(
             api_key="YOUR_API_KEY",
@@ -387,7 +387,7 @@ class DecisionsClient:
             result = client.decisions.create_chunked(
                 request=DecisionsRequest(
                     questions={
-                        "agent_glitches": Question_Moment(
+                        "agent_glitches": Question_Span(
                             instructions="Where does the agent glitch, slur or sound robotic?",
                         ),
                     },
@@ -634,7 +634,7 @@ class AsyncDecisionsClient:
         """
         Cuts a recording longer than `create` accepts into chunks and sends each chunk to the model in its own `create` request. The recording is never sent as one file. The model processes each chunk independently, hearing only that chunk, so every answer describes its chunk alone and nothing combines the answers across chunks. Each request has its own `run_id` and its own billing. Each chunk's result is yielded as soon as its request is done, so it can be saved or reported before the next chunk is sent.
 
-        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A span's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
@@ -689,7 +689,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Span
 
         client = AsyncDecisionsClient(
             api_key="YOUR_API_KEY",
@@ -701,7 +701,7 @@ class AsyncDecisionsClient:
                 async for chunk in client.decisions.iter_create_chunked(
                     request=DecisionsRequest(
                         questions={
-                            "agent_glitches": Question_Moment(
+                            "agent_glitches": Question_Span(
                                 instructions="Where does the agent glitch, slur or sound robotic?",
                             ),
                         },
@@ -747,7 +747,7 @@ class AsyncDecisionsClient:
 
         Sends the chunks as `iter_create_chunked` does and returns once every chunk is done. If the process stops partway through, the responses already received are lost although they were billed, so use `iter_create_chunked` to keep each response as it arrives.
 
-        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A moment's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
+        The chunks are cut by `audio_helpers.iter_audio_chunks`, which describes where cuts fall in MP3 and WAV files, and are sent one at a time, in order. Each request asks the same questions with the same context. A span's times are measured from the start of its chunk, so add the chunk's `start_ms` to place it in the recording.
 
         The whole recording is read into memory before the first request, so that a file that cannot be split is rejected before anything is sent and billed. A WAV file is mixed down before it is cut, as `downmix_strategy` asks. Each chunk is copied only while its request is sent, so memory use stays near the size of the recording and its mixed-down copy. An hour of 16-bit stereo WAV at 48 kHz is about 690 MB, and about 230 MB once mixed down.
 
@@ -802,7 +802,7 @@ class AsyncDecisionsClient:
         --------
         import asyncio
 
-        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Moment
+        from hume_audio_decisions import AsyncDecisionsClient, DecisionsRequest, Question_Span
 
         client = AsyncDecisionsClient(
             api_key="YOUR_API_KEY",
@@ -814,7 +814,7 @@ class AsyncDecisionsClient:
                 result = await client.decisions.create_chunked(
                     request=DecisionsRequest(
                         questions={
-                            "agent_glitches": Question_Moment(
+                            "agent_glitches": Question_Span(
                                 instructions="Where does the agent glitch, slur or sound robotic?",
                             ),
                         },
