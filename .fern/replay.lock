@@ -102,14 +102,20 @@ generations:
     cli_version: unknown
     generator_versions:
       fernapi/fern-python-sdk: 5.41.9
-current_generation: 2735f1df91f1ce2fa0c957bd4d7758f0d56e84ea
+  - commit_sha: ef0cb1affdd75109a08debc884ae72c3c23dfa7d
+    tree_hash: 7b0fe6cf78b6434ce5a00aeebd8e68337bdd26d5
+    timestamp: 2026-11-03T05:38:53.361Z
+    cli_version: unknown
+    generator_versions:
+      fernapi/fern-python-sdk: 5.41.9
+current_generation: ef0cb1affdd75109a08debc884ae72c3c23dfa7d
 patches:
   - id: patch-95641ac3
     content_hash: sha256:ecbb284f54fd971c1d2feb2f68f41444532870018d18870357031dea37b333b9
     original_commit: 95641ac3ec35a74d5ab499f09ef3c31feb9d4e02
     original_message: Publish only from version tags that match the package version, using trusted publishing through a registry environment
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2735f1df91f1ce2fa0c957bd4d7758f0d56e84ea
+    base_generation: ef0cb1affdd75109a08debc884ae72c3c23dfa7d
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -303,7 +309,7 @@ patches:
     original_commit: ee0246f8c8a8820d12522750b41d7438080a0d9f
     original_message: Add a numpy-based converter that resamples WAV above 16 kHz to 16 kHz and mixes stereo down the way the API's ffmpeg conversion does, so audio can be sent smaller without changing what the model hears
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2735f1df91f1ce2fa0c957bd4d7758f0d56e84ea
+    base_generation: ef0cb1affdd75109a08debc884ae72c3c23dfa7d
     files:
       - poetry.lock
       - pyproject.toml
@@ -425,7 +431,7 @@ patches:
       -content-hash = "4eaeff06fb8e558535aa3729ed6f99c2398eaaba665bcdf9c096bb08d9cb5fc6"
       +content-hash = "11f7ac01c981518d6ad586545714fc580711e7d33b4ce98ae820fc208311fc70"
       diff --git a/pyproject.toml b/pyproject.toml
-      index 708c929..f641bdf 100644
+      index 406e541..5600e39 100644
       --- a/pyproject.toml
       +++ b/pyproject.toml
       @@ -44,6 +44,7 @@ python = "^3.10"
@@ -2144,7 +2150,7 @@ patches:
 
         [tool.poetry]
         name = "hume-audio-decisions"
-        version = "0.1.1"
+        version = "0.2.1"
         description = "A Python SDK for the Audio Decisions API"
         readme = "README.md"
         authors = []
@@ -2250,7 +2256,7 @@ patches:
     original_commit: 389d2f823d531a5be9607f0a32a6e280d1173213
     original_message: Point the PyPI environment back at hume-audio-decisions, which a stale replay patch reverted to hume-decisions
     original_author: zach <zachary.greathouse@hume.ai>
-    base_generation: 2735f1df91f1ce2fa0c957bd4d7758f0d56e84ea
+    base_generation: ef0cb1affdd75109a08debc884ae72c3c23dfa7d
     files:
       - .github/workflows/ci.yml
     patch_content: |
@@ -2439,6 +2445,295 @@ patches:
                 with:
                   repository-url: https://upload.pypi.org/legacy/
     user_owned: true
+  - id: patch-e11e47af
+    content_hash: sha256:056ce7d59f92de531886dccf1b046a82d36284efe4e4b86ea03f88ba95c9aacd
+    original_commit: e11e47afe3584190c9593e42283a2d31a70cf7aa
+    original_message: Release 0.2.0 for the span rename and rename moment to span in the README
+    original_author: zach <zachary.greathouse@hume.ai>
+    base_generation: 5659775d96fca71634696ec4b55c0cbfbbbc919c
+    files:
+      - pyproject.toml
+      - src/hume_audio_decisions/core/client_wrapper.py
+    patch_content: |
+      diff --git a/pyproject.toml b/pyproject.toml
+      index f641bdf..12b5556 100644
+      --- a/pyproject.toml
+      +++ b/pyproject.toml
+      @@ -6,7 +6,7 @@ license-files = ["LICENSE"]
+       
+       [tool.poetry]
+       name = "hume-audio-decisions"
+      -version = "0.1.1"
+      +version = "0.2.0"
+       description = "A Python SDK for the Audio Decisions API"
+       readme = "README.md"
+       authors = []
+      diff --git a/src/hume_audio_decisions/core/client_wrapper.py b/src/hume_audio_decisions/core/client_wrapper.py
+      index 3d2945c..ced41b3 100644
+      --- a/src/hume_audio_decisions/core/client_wrapper.py
+      +++ b/src/hume_audio_decisions/core/client_wrapper.py
+      @@ -33,12 +33,12 @@ class BaseClientWrapper:
+               import platform
+       
+               headers: typing.Dict[str, str] = {
+      -            "User-Agent": "hume-audio-decisions/0.1.1",
+      +            "User-Agent": "hume-audio-decisions/0.2.0",
+                   "X-Fern-Language": "Python",
+                   "X-Fern-Runtime": f"python/{platform.python_version()}",
+                   "X-Fern-Platform": f"{platform.system().lower()}/{platform.release()}",
+                   "X-Fern-SDK-Name": "hume-audio-decisions",
+      -            "X-Fern-SDK-Version": "0.1.1",
+      +            "X-Fern-SDK-Version": "0.2.0",
+                   **(self.get_custom_headers() or {}),
+               }
+               headers["X-Hume-Api-Key"] = self.api_key
+    theirs_snapshot:
+      pyproject.toml: |
+        [project]
+        name = "hume-audio-decisions"
+        dynamic = ["version"]
+        license = "MIT"
+        license-files = ["LICENSE"]
+
+        [tool.poetry]
+        name = "hume-audio-decisions"
+        version = "0.2.0"
+        description = "A Python SDK for the Audio Decisions API"
+        readme = "README.md"
+        authors = []
+        keywords = []
+        license = "MIT"
+        classifiers = [
+            "Intended Audience :: Developers",
+            "Programming Language :: Python",
+            "Programming Language :: Python :: 3",
+            "Programming Language :: Python :: 3.10",
+            "Programming Language :: Python :: 3.11",
+            "Programming Language :: Python :: 3.12",
+            "Programming Language :: Python :: 3.13",
+            "Programming Language :: Python :: 3.14",
+            "Programming Language :: Python :: 3.15",
+            "Operating System :: OS Independent",
+            "Operating System :: POSIX",
+            "Operating System :: MacOS",
+            "Operating System :: POSIX :: Linux",
+            "Operating System :: Microsoft :: Windows",
+            "Topic :: Software Development :: Libraries :: Python Modules",
+            "Typing :: Typed"
+        ]
+        packages = [
+            { include = "hume_audio_decisions", from = "src"}
+        ]
+
+        [tool.poetry.urls]
+        Documentation = 'https://dev.hume.ai/audio-decisions/docs/overview'
+        Homepage = 'https://www.hume.ai/'
+        Repository = 'https://github.com/HumeAI/hume-audio-decisions-python-sdk'
+
+        [tool.poetry.dependencies]
+        python = "^3.10"
+        aiohttp = { version = ">=3.14.1,<4", optional = true, python = ">=3.10"}
+        httpx = ">=0.21.2"
+        httpx-aiohttp = { version = "^0.1.8", optional = true, python = ">=3.10"}
+        numpy = ">=1.22"
+        pydantic = ">= 1.9.2"
+        pydantic-core = ">=2.18.2,<3.0.0"
+        typing_extensions = ">= 4.0.0"
+
+        [tool.poetry.group.dev.dependencies]
+        mypy = "==1.13.0"
+        pytest = "^9.0.3"
+        pytest-asyncio = "^1.0.0"
+        pytest-xdist = "^3.6.1"
+        python-dateutil = "^2.9.0"
+        types-python-dateutil = "^2.9.0.20240316"
+        urllib3 = ">=2.6.3,<3.0.0"
+        ruff = "==0.11.5"
+
+        [tool.pytest.ini_options]
+        testpaths = [ "tests" ]
+        asyncio_mode = "auto"
+        norecursedirs = [ "src" ]
+        markers = [
+            "aiohttp: tests that require httpx_aiohttp to be installed",
+        ]
+
+        [tool.mypy]
+        plugins = ["pydantic.mypy"]
+
+        [tool.ruff]
+        line-length = 120
+
+        [tool.ruff.lint]
+        select = [
+            "E",  # pycodestyle errors
+            "F",  # pyflakes
+            "I",  # isort
+        ]
+        ignore = [
+            "E402",  # Module level import not at top of file
+            "E501",  # Line too long
+            "E711",  # Comparison to `None` should be `cond is not None`
+            "E712",  # Avoid equality comparisons to `True`; use `if ...:` checks
+            "E721",  # Use `is` and `is not` for type comparisons, or `isinstance()` for insinstance checks
+            "E722",  # Do not use bare `except`
+            "E731",  # Do not assign a `lambda` expression, use a `def`
+            "F821",  # Undefined name
+            "F841"   # Local variable ... is assigned to but never used
+        ]
+
+        [tool.ruff.lint.isort]
+        section-order = ["future", "standard-library", "third-party", "first-party"]
+
+        [build-system]
+        requires = ["poetry-core"]
+        build-backend = "poetry.core.masonry.api"
+
+        [tool.poetry.extras]
+        aiohttp=["aiohttp", "httpx-aiohttp"]
+      src/hume_audio_decisions/core/client_wrapper.py: |
+        # This file was auto-generated by Fern from our API Definition.
+
+        import typing
+
+        import httpx
+        from .http_client import AsyncHttpClient, HttpClient
+        from .logging import LogConfig, Logger
+
+
+        class BaseClientWrapper:
+            def __init__(
+                self,
+                *,
+                api_key: str,
+                headers: typing.Optional[typing.Dict[str, str]] = None,
+                base_url: str,
+                timeout: typing.Optional[float] = None,
+                max_retries: int = 2,
+                stream_reconnection_enabled: typing.Optional[bool] = None,
+                max_stream_reconnection_attempts: typing.Optional[int] = None,
+                logging: typing.Optional[typing.Union[LogConfig, Logger]] = None,
+            ):
+                self.api_key = api_key
+                self._headers = headers
+                self._base_url = base_url
+                self._timeout = timeout
+                self._max_retries = max_retries
+                self._stream_reconnection_enabled = stream_reconnection_enabled
+                self._max_stream_reconnection_attempts = max_stream_reconnection_attempts
+                self._logging = logging
+
+            def get_headers(self) -> typing.Dict[str, str]:
+                import platform
+
+                headers: typing.Dict[str, str] = {
+                    "User-Agent": "hume-audio-decisions/0.2.0",
+                    "X-Fern-Language": "Python",
+                    "X-Fern-Runtime": f"python/{platform.python_version()}",
+                    "X-Fern-Platform": f"{platform.system().lower()}/{platform.release()}",
+                    "X-Fern-SDK-Name": "hume-audio-decisions",
+                    "X-Fern-SDK-Version": "0.2.0",
+                    **(self.get_custom_headers() or {}),
+                }
+                headers["X-Hume-Api-Key"] = self.api_key
+                return headers
+
+            def get_custom_headers(self) -> typing.Optional[typing.Dict[str, str]]:
+                return self._headers
+
+            def get_base_url(self) -> str:
+                return self._base_url
+
+            def get_timeout(self) -> typing.Optional[float]:
+                return self._timeout
+
+            def get_max_retries(self) -> int:
+                return self._max_retries
+
+            def get_stream_reconnection_enabled(self) -> bool:
+                return self._stream_reconnection_enabled if self._stream_reconnection_enabled is not None else True
+
+            def get_max_stream_reconnection_attempts(self) -> typing.Optional[int]:
+                return self._max_stream_reconnection_attempts
+
+
+        class SyncClientWrapper(BaseClientWrapper):
+            def __init__(
+                self,
+                *,
+                api_key: str,
+                headers: typing.Optional[typing.Dict[str, str]] = None,
+                base_url: str,
+                timeout: typing.Optional[float] = None,
+                max_retries: int = 2,
+                stream_reconnection_enabled: typing.Optional[bool] = None,
+                max_stream_reconnection_attempts: typing.Optional[int] = None,
+                logging: typing.Optional[typing.Union[LogConfig, Logger]] = None,
+                httpx_client: httpx.Client,
+            ):
+                super().__init__(
+                    api_key=api_key,
+                    headers=headers,
+                    base_url=base_url,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                    stream_reconnection_enabled=stream_reconnection_enabled,
+                    max_stream_reconnection_attempts=max_stream_reconnection_attempts,
+                    logging=logging,
+                )
+                self.httpx_client = HttpClient(
+                    httpx_client=httpx_client,
+                    base_headers=self.get_headers,
+                    base_timeout=self.get_timeout,
+                    base_url=self.get_base_url,
+                    base_max_retries=self.get_max_retries(),
+                    logging_config=self._logging,
+                )
+
+
+        class AsyncClientWrapper(BaseClientWrapper):
+            def __init__(
+                self,
+                *,
+                api_key: str,
+                headers: typing.Optional[typing.Dict[str, str]] = None,
+                base_url: str,
+                timeout: typing.Optional[float] = None,
+                max_retries: int = 2,
+                stream_reconnection_enabled: typing.Optional[bool] = None,
+                max_stream_reconnection_attempts: typing.Optional[int] = None,
+                logging: typing.Optional[typing.Union[LogConfig, Logger]] = None,
+                async_token: typing.Optional[typing.Callable[[], typing.Awaitable[str]]] = None,
+                httpx_client: httpx.AsyncClient,
+            ):
+                super().__init__(
+                    api_key=api_key,
+                    headers=headers,
+                    base_url=base_url,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                    stream_reconnection_enabled=stream_reconnection_enabled,
+                    max_stream_reconnection_attempts=max_stream_reconnection_attempts,
+                    logging=logging,
+                )
+                self._async_token = async_token
+                self.httpx_client = AsyncHttpClient(
+                    httpx_client=httpx_client,
+                    base_headers=self.get_headers,
+                    base_timeout=self.get_timeout,
+                    base_url=self.get_base_url,
+                    base_max_retries=self.get_max_retries(),
+                    async_base_headers=self.async_get_headers,
+                    logging_config=self._logging,
+                )
+
+            async def async_get_headers(self) -> typing.Dict[str, str]:
+                headers = self.get_headers()
+                if self._async_token is not None:
+                    token = await self._async_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                return headers
+    status: unresolved
 dismissals:
   - patch_id: patch-99fd44c5
     original_commit: 99fd44c50397a33c8b17f61379e5ee56d8154288
