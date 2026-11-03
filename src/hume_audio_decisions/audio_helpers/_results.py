@@ -28,8 +28,8 @@ class ChunkResult:
         Position of the chunk in the recording, starting at 0.
 
     start_ms : int
-        Where the chunk starts in the recording, in milliseconds. A moment's `audio_start_ms` and
-        `audio_end_ms` are measured from the start of the chunk, so add this to place the moment in
+        Where the chunk starts in the recording, in milliseconds. A span's `audio_start_ms` and
+        `audio_end_ms` are measured from the start of the chunk, so add this to place the span in
         the recording. The first chunk of an MP3 file can start a few tens of milliseconds before 0.
 
     end_ms : int
