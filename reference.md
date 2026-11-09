@@ -210,7 +210,7 @@ client.decisions.input_tokens(
 <dl>
 <dd>
 
-**audio_duration_ms:** `int` — The duration of the audio file the decisions request would send, in milliseconds. A duration under 5 seconds is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`.
+**audio_duration_ms:** `int` — The duration of the audio file the decisions request would send, in milliseconds. A duration under 1 second is rejected with `audio_too_short`, and one over 5 minutes with `audio_too_long`.
     
 </dd>
 </dl>
