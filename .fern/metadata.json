@@ -1,5 +1,5 @@
 {
-  "cliVersion": "5.175.0",
+  "cliVersion": "5.191.2",
   "generatorName": "fernapi/fern-python-sdk",
   "generatorVersion": "5.41.9",
   "generatorConfig": {
@@ -8,9 +8,9 @@
       "class_name": "DecisionsClient"
     }
   },
-  "originGitCommit": "36928921efad4e29969f401b3563ae5f80ca23d6",
+  "originGitCommit": "fb21386d571211795e7833d31c94464470483335",
   "originGitCommitIsDirty": false,
   "invokedBy": "ci",
   "ciProvider": "github",
-  "sdkVersion": "0.2.0"
+  "sdkVersion": "0.2.1"
 }
