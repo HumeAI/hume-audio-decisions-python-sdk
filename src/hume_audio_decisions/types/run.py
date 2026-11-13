@@ -37,9 +37,9 @@ class Run(UniversalBaseModel):
     """
 
     received: RunReceived
-    request: DecisionsRequest = pydantic.Field()
+    request: typing.Optional[DecisionsRequest] = pydantic.Field(default=None)
     """
-    The `request` part the run evaluated: its `context` and `questions`, as sent.
+    The `request` part the run evaluated: its `context` and `questions`, as sent. `null` when the organization has zero data retention, which keeps nothing a run was sent or answered.
     """
 
     if IS_PYDANTIC_V2:
